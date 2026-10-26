@@ -1,0 +1,94 @@
+instdir: "../../instances/"
+instances:
+  - repo: local
+    items:
+      - name: atacseq
+        files:
+          - DAGs/atacseq.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq200
+        files:
+          - DAGs/atacseq200.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq1000
+        files:
+          - DAGs/atacseq1000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq
+        files:
+          - DAGs/chipseq.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: bacass
+        files:
+          - DAGs/bacass.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+experiments:
+  - name: CaWoMap_DE2024_small
+    args: ['./../../../../code/deploy/main', '@INSTANCE:0@', '@INSTANCE:1@', 'small', '@INSTANCE:2@', 'local-search']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoMap_LA2024_small
+    args: ['./../../../../code/deploy/main', '@INSTANCE:0@', '@INSTANCE:1@', 'small', '@INSTANCE:3@', 'local-search']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoMap_DE2024_large
+    args: ['./../../../../code/deploy/main', '@INSTANCE:0@', '@INSTANCE:1@', 'large', '@INSTANCE:4@', 'local-search']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoMap_LA2024_large
+    args: ['./../../../../code/deploy/main', '@INSTANCE:0@', '@INSTANCE:1@', 'large', '@INSTANCE:5@', 'local-search']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoSched_DE2024_small
+    args: ['./CaWoSched_app.sh', '@INSTANCE:0@', '@INSTANCE:1@', 'small', '@INSTANCE:2@']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoSched_LA2024_small
+    args: ['./CaWoSched_app.sh', '@INSTANCE:0@', '@INSTANCE:1@', 'small', '@INSTANCE:3@']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoSched_DE2024_large
+    args: ['./CaWoSched_app.sh', '@INSTANCE:0@', '@INSTANCE:1@', 'large', '@INSTANCE:4@']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoSched_LA2024_large
+    args: ['./CaWoSched_app.sh', '@INSTANCE:0@', '@INSTANCE:1@', 'large', '@INSTANCE:5@']
+    exclusive: true
+    stdout: out

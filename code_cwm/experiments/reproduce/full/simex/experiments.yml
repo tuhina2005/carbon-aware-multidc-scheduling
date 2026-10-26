@@ -1,0 +1,484 @@
+instdir: "../../instances/"
+instances:
+  - repo: local
+    items:
+      - name: atacseq
+        files:
+          - DAGs/atacseq.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq200
+        files:
+          - DAGs/atacseq200.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq1000
+        files:
+          - DAGs/atacseq1000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq2000
+        files:
+          - DAGs/atacseq2000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq4000
+        files:
+          - DAGs/atacseq4000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq8000
+        files:
+          - DAGs/atacseq8000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq10000
+        files:
+          - DAGs/atacseq10000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq15000
+        files:
+          - DAGs/atacseq15000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq20000
+        files:
+          - DAGs/atacseq20000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq25000
+        files:
+          - DAGs/atacseq25000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: atacseq30000
+        files:
+          - DAGs/atacseq30000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq
+        files:
+          - DAGs/chipseq.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq200
+        files:
+          - DAGs/chipseq200.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq1000
+        files:
+          - DAGs/chipseq1000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq2000
+        files:
+          - DAGs/chipseq2000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq4000
+        files:
+          - DAGs/chipseq4000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq8000
+        files:
+          - DAGs/chipseq8000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq10000
+        files:
+          - DAGs/chipseq10000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq15000
+        files:
+          - DAGs/chipseq15000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq20000
+        files:
+          - DAGs/chipseq20000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq25000
+        files:
+          - DAGs/chipseq25000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: chipseq30000
+        files:
+          - DAGs/chipseq30000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager
+        files:
+          - DAGs/eager.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager200
+        files:
+          - DAGs/eager200.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager1000
+        files:
+          - DAGs/eager1000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager2000
+        files:
+          - DAGs/eager2000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager4000
+        files:
+          - DAGs/eager4000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager8000
+        files:
+          - DAGs/eager8000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager10000
+        files:
+          - DAGs/eager10000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager15000
+        files:
+          - DAGs/eager15000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager20000
+        files:
+          - DAGs/eager20000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager25000
+        files:
+          - DAGs/eager25000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: eager30000
+        files:
+          - DAGs/eager30000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq200
+        files:
+          - DAGs/methylseq200.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq1000
+        files:
+          - DAGs/methylseq1000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq2000
+        files:
+          - DAGs/methylseq2000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq4000
+        files:
+          - DAGs/methylseq4000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq8000
+        files:
+          - DAGs/methylseq8000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq10000
+        files:
+          - DAGs/methylseq10000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq15000
+        files:
+          - DAGs/methylseq15000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq20000
+        files:
+          - DAGs/methylseq20000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq25000
+        files:
+          - DAGs/methylseq25000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: methylseq30000
+        files:
+          - DAGs/methylseq30000.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+      - name: bacass
+        files:
+          - DAGs/bacass.dot
+          - cluster_processors.json
+          - Profiles/small/DE24s.json
+          - Profiles/small/LA24s.json
+          - Profiles/large/DE24l.json
+          - Profiles/large/LA24l.json
+        extra_args: ['small', 'large']
+
+experiments:
+  - name: CaWoMap_DE2024_small
+    args: ['./../../../../code/deploy/main', '@INSTANCE:0@', '@INSTANCE:1@', 'small', '@INSTANCE:2@', 'local-search']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoMap_LA2024_small
+    args: ['./../../../../code/deploy/main', '@INSTANCE:0@', '@INSTANCE:1@', 'small', '@INSTANCE:3@', 'local-search']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoMap_DE2024_large
+    args: ['./../../../../code/deploy/main', '@INSTANCE:0@', '@INSTANCE:1@', 'large', '@INSTANCE:4@', 'local-search']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoMap_LA2024_large
+    args: ['./../../../../code/deploy/main', '@INSTANCE:0@', '@INSTANCE:1@', 'large', '@INSTANCE:5@', 'local-search']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoSched_DE2024_small
+    args: ['./CaWoSched_app.sh', '@INSTANCE:0@', '@INSTANCE:1@', 'small', '@INSTANCE:2@']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoSched_LA2024_small
+    args: ['./CaWoSched_app.sh', '@INSTANCE:0@', '@INSTANCE:1@', 'small', '@INSTANCE:3@']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoSched_DE2024_large
+    args: ['./CaWoSched_app.sh', '@INSTANCE:0@', '@INSTANCE:1@', 'large', '@INSTANCE:4@']
+    exclusive: true
+    stdout: out
+
+  - name: CaWoSched_LA2024_large
+    args: ['./CaWoSched_app.sh', '@INSTANCE:0@', '@INSTANCE:1@', 'large', '@INSTANCE:5@']
+    exclusive: true
+    stdout: out

@@ -1,0 +1,6 @@
+simexpal
+pandas
+numpy
+matplotlib
+tabulate
+jupyter
