@@ -130,3 +130,35 @@ class GapFillTest(unittest.TestCase):
         long = [1.0] + [None] * (MAX_GAP_HOURS + 1) + [1.0]
         with self.assertRaisesRegex(ValueError, "consecutive hours missing"):
             _fill_short_gaps(long, "X", hours[:len(long)])
+
+
+class MultiDateTest(unittest.TestCase):
+    def test_third_wednesdays(self):
+        from cwm_multidc.experiments import DEFAULT_CI_START, third_wednesdays
+        d = third_wednesdays(2024)
+        self.assertEqual(len(d), 12)
+        self.assertIn(DEFAULT_CI_START, d)
+        self.assertTrue(all(dt.date.fromisoformat(x).weekday() == 2 and 15 <= int(x[8:]) <= 21 for x in d))
+
+    def test_multidate_requires_real_ci(self):
+        with self.assertRaisesRegex(SystemExit, "--ci-dir"):
+            exp_main(["multidate"])
+
+    def test_report_keys_on_date(self):
+        """Two dates with identical problem keys must stay separate problems in the tables."""
+        from cwm_multidc.plots import multidate_md
+        rows = []
+        for date, (ours, b3, a1, t) in {"2024-01-17": (50.0, 100.0, 100.0, 2.0),
+                                        "2024-07-17": (100.0, 100.0, 100.0, 0.0)}.items():
+            for metric in ("brown", "location"):
+                for m, v in (("Ours", ours), ("B3", b3), ("A1", a1), ("B1", 200.0)):
+                    rows.append(dict(ci_date=date, dag="x", start_hour=6, data_size_gb=100.0, alpha=2.0,
+                                     metric=metric, eps_kwh_per_gb=0.02, method=m, total_gco2=v, dc="DC_Paris",
+                                     t_net_h=t if m == "Ours" else 0.0, net_gco2=v, comp_gco2=0.0))
+        with tempfile.TemporaryDirectory() as out:
+            multidate_md(pd.DataFrame(rows), Path(out), {"dates": ["2024-01-17", "2024-07-17"], "label": "L",
+                                                          "start_hours_utc": [6]})
+            text = (Path(out) / "multidate.md").read_text()
+        b3 = next(line for line in text.splitlines() if line.startswith("| B3:"))
+        self.assertEqual([c.strip() for c in b3.split("|")[2:4]], ["2", "25"])  # n = 2 problems, mean 25%
+        self.assertIn("Ours waits (T_net > 0) in 1 of 2 problems", text)

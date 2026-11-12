@@ -235,9 +235,9 @@ class TestEndToEnd(unittest.TestCase):
         dcs = (("DC_Frankfurt", "DE"), ("DC_Oslo", "NO"), ("DC_Warsaw", "PL"))
         cls.topo = build_topology(24, DEFAULT_CLUSTER, dcs=dcs, start_hour=6)
         cls.problem = Problem(DAG_DIR / "atacseq200.dot", cls.topo, 1000.0, alpha=2.0)
-        # solve_cwm is not run-to-run deterministic for a fixed seed (inherited from the CWM
-        # baseline: ~10 % of runs return a different schedule), so the direct call below shares
-        # this in-memory cache: a hit proves Ours passed byte-identical inputs to the solver.
+        # The direct call below shares this in-memory cache: a hit proves Ours passed
+        # byte-identical inputs to the solver.  (This also kept the test stable while solve_cwm
+        # was nondeterministic, before the mapper.cpp out-of-bounds fix.)
         cls.cache = ResultCache(None)
         cls.result = solve(cls.problem, CWMRunner(cache=cls.cache))
 

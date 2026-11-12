@@ -136,5 +136,29 @@ class TestRealBinary(unittest.TestCase):
             CWMRunner(cluster_json=DEFAULT_CLUSTER.with_name("missing.json"))
 
 
+@unittest.skipUnless(HAVE_BIN, "solve_cwm not built")
+class TestDeterminism(unittest.TestCase):
+    """Regression test for the out-of-bounds read in mapper.cpp (sweep line past the profile horizon).
+
+    Before the fix, this exact instance (synthetic CI, Frankfurt, atacseq200, D = 336, seed 42)
+    returned brown energy 6222 in ~80 % of runs and 5673 otherwise.
+    """
+
+    def test_same_input_same_schedule(self):
+        from cwm_multidc.data_loader import build_topology
+        from cwm_multidc.profile_shifting import truncate_profile
+
+        topo = build_topology(24, DEFAULT_CLUSTER, dcs=(("DC_Frankfurt", "DE"), ("DC_Oslo", "NO"),
+                                                        ("DC_Warsaw", "PL")), start_hour=6)
+        power, _ = topo.profiles("DC_Frankfurt")
+        profile = truncate_profile(power, 336)
+        runner = CWMRunner()  # no cache: every call runs the binary
+        dag = DAG_DIR / "atacseq200.dot"
+        results = {(r.status, r.makespan, r.carbon_cost, tuple(r.per_interval or ())) for r in (runner.solve(dag, profile, 336, seed=42)
+                                                                    for _ in range(6))}
+        self.assertEqual(len(results), 1, f"solve_cwm gave different results for the same input: {results}")
+        self.assertEqual(next(iter(results))[2], 6222)
+
+
 if __name__ == "__main__":
     unittest.main()

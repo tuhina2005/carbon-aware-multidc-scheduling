@@ -55,3 +55,7 @@ cwm_multidc/results/cache.jsonl
 
 # raw public CI downloads (re-fetchable)
 cwm_multidc/data/public_ci/raw/
+
+# pre-fix solver backups (identical to the results committed before the mapper.cpp fix; kept locally for comparison)
+cwm_multidc/results/cache_pre_fix_solver.jsonl
+cwm_multidc/results/pre_fix_solver/

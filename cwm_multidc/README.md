@@ -201,18 +201,30 @@ and every figure and table states the source in its footer.
 
 ## 6. Running experiments
 
+**One command:** `./reproduce_multidc.sh` (build, tests, every experiment, plots; ~12–14 h) or
+`./reproduce_multidc.sh quick` (~1.5 h, skips the multi-date study). Individual steps:
+
 ```bash
 python -m cwm_multidc.experiments grid       # 2 DAGs x 5 data sizes x 7 deadlines (sweeps are slices)
 python -m cwm_multidc.experiments headline   # 4 DAGs x 2 start hours x 2 deadlines, 3 seeds, + C1 control
 python -m cwm_multidc.experiments sensitivity # kappa {60,120,240 s}, bandwidth {0.5..10 Gbps}, forecast error
-python -m cwm_multidc.experiments plot       # results/fig_*.png, results/*.md
+python -m cwm_multidc.experiments multidate --ci-dir DIR  # 12 dates x 4 start hours (real CI only)
+python -m cwm_multidc.experiments plot       # results/fig_*.png, results/*.md, results/multidate/
 ```
 
-Add `--ci-dir cwm_multidc/data/electricitymaps` to `grid`/`headline`/`sensitivity` for real CI.
+Figures use the **location** metric (primary); `fig_*_brown.png` are the brown-metric copies.
+Multi-date outputs (third Wednesday of each month of 2024 × start hours 0/6/12/18 UTC) go to
+`results/multidate/`.
+
+Add `--ci-dir cwm_multidc/data/public_ci` (or an Electricity Maps directory) to `grid`/`headline`/
+`sensitivity` for real CI.
 Experiment start hours (UTC hour of day) are then placed on `--ci-start` (default 2024-04-17,
 a mid-April Wednesday); a directory missing any region is an error, never a silent mix.
 
 Solver results are cached in `results/cache.jsonl`, so the commands can be resumed and re-run cheaply.
+The cache key includes the SHA-256 of `solve_cwm`, so results from another solver build are never
+reused. Each results folder's `ci_source.json` records the CI source, the solver hash and the git
+commit; the tables print a warning when the deployed solver differs from the one that produced them.
 Every summary is also written for ε_net ∈ {0.001, 0.005, 0.02, 0.06} kWh/GB (column `eps_kwh_per_gb`).
 Forecast experiments decide on CI × exp(AR(1) noise) and score the chosen points on the actual CI
 (the CWM schedule itself is recomputed on the actual profile).

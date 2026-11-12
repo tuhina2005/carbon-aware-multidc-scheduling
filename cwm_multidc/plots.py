@@ -69,12 +69,27 @@ def _footer(fig, source: str):
              ha="left", va="bottom")
 
 
+def _solver_warning(out: Path) -> list[str]:
+    """Markdown warning when a results folder was produced by another solver build than the deployed one."""
+    from .cwm_runner import DEPLOY_DIR, file_sha256
+    f, solver = Path(out) / "ci_source.json", DEPLOY_DIR / "solve_cwm"
+    if not (f.exists() and solver.exists()):
+        return []
+    info = json.loads(f.read_text())
+    used = info.get("solver_sha256")
+    if used is None or used == file_sha256(solver):
+        return []
+    return [f"> ⚠ Produced with solver build `{used[:12]}`, not the deployed `{file_sha256(solver)[:12]}`. "
+            + info.get("solver_note", "Re-run to refresh."), ""]
+
+
 def _label(m):
     return f"{m}: {BASELINE_NAMES[m]}" if m != "Ours" else "Ours: Joint Spatiotemporal"
 
 
 # --------------------------------------------------------------------------- figures
-def fig_pareto(evals: pd.DataFrame, summ: pd.DataFrame, out: Path, size=1000.0, alpha=2.0, dags=None):
+def fig_pareto(evals: pd.DataFrame, summ: pd.DataFrame, out: Path, size=1000.0, alpha=2.0, dags=None,
+               metric: str = "brown", suffix: str = ""):
     dags = [d for d in (dags or sorted(evals.dag.unique())) if d in set(evals.dag)]
     fig, axes = plt.subplots(1, len(dags), figsize=(6.0 * len(dags), 4.8), squeeze=False)
     for ax, dag in zip(axes[0], dags):
@@ -84,7 +99,8 @@ def fig_pareto(evals: pd.DataFrame, summ: pd.DataFrame, out: Path, size=1000.0, 
         if e.empty:
             ax.set_visible(False)
             continue
-        e = e.assign(net=e.net_gco2 / 1e3, comp=e.comp_gco2 / 1e3)
+        comp = e.comp_loc_gco2 if metric == "location" else e.comp_gco2
+        e = e.assign(net=e.net_gco2 / 1e3, comp=comp / 1e3)
         for dc in DCS:
             d = e[e.dc == dc].sort_values("t_net_s")
             if d.empty:
@@ -109,8 +125,8 @@ def fig_pareto(evals: pd.DataFrame, summ: pd.DataFrame, out: Path, size=1000.0, 
         xmax, ymax = span, span
         n_out = int(((e.net > xmax) | (e.comp > ymax)).sum())
         if n_out:
-            ax.text(0.99, 0.02, f"{n_out} dominated points outside view", transform=ax.transAxes,
-                    ha="right", va="bottom", fontsize=7, color=TEXT2)
+            ax.text(0.02, 0.98, f"{n_out} dominated points outside view", transform=ax.transAxes,
+                    ha="left", va="top", fontsize=7, color=TEXT2)
         tot_min = (e.net + e.comp).min()
         for t in (tot_min, ref.total_gco2.max() / 1e3 if len(ref) else tot_min):
             ax.plot([0, t], [t, 0], color=TEXT2, lw=0.8, ls="--", zorder=0, alpha=0.5)
@@ -124,17 +140,20 @@ def fig_pareto(evals: pd.DataFrame, summ: pd.DataFrame, out: Path, size=1000.0, 
                     and np.isclose(s[s.method == mm].total_gco2.iloc[0], r.total_gco2.iloc[0])]
             if any(METHODS.index(mm) < METHODS.index(m) for mm in same):
                 continue  # label drawn once for coincident methods
-            ax.annotate("=".join([m] + same), (x, y), xytext=(7, 7), textcoords="offset points",
-                        color=TEXT, fontsize=8)
+            left = m == "Ours"  # Ours usually sits just left of B3/B5: label it on the other side
+            ax.annotate("=".join([m] + same), (x, y), xytext=(-9 if left else 9, 9), textcoords="offset points",
+                        ha="right" if left else "left", color=TEXT, fontsize=8,
+                        bbox=dict(boxstyle="round,pad=0.15", fc=SURFACE, ec="none", alpha=0.85))
         ax.set_xlim(0, xmax)
         ax.set_ylim(0, ymax)
         ax.set_xlabel("Network carbon (kgCO$_2$)")
-        ax.set_ylabel("Compute carbon (kgCO$_2$)")
-        ax.set_title(f"{dag}: Δ = {size / 1000:g} TB, D = {alpha}·M\none point per (DC, T$_{{net}}$); dashed = iso-total")
+        ax.set_ylabel(f"Compute carbon, {metric} metric (kgCO$_2$)")
+        ax.set_title(f"{dag}: Δ = {size / 1000:g} TB, D = {alpha}·M ({metric} metric)\n"
+                     f"one point per (DC, T$_{{net}}$); dashed = iso-total")
         ax.legend(fontsize=7, ncol=2, loc="upper right")
     _footer(fig, _source(evals))
     fig.tight_layout(rect=(0, 0.03, 1, 1))
-    fig.savefig(out / "fig_pareto.png", dpi=180)
+    fig.savefig(out / f"fig_pareto{suffix}.png", dpi=180)
     plt.close(fig)
 
 
@@ -167,7 +186,7 @@ def _choice_strip(ax, s: pd.DataFrame, x: str, logx=False):
     ax.set_ylim(bottom=-0.2, top=max(1.0, o.t_net_h.max() * 1.35 if len(o) else 1.0))
 
 
-def fig_sweep(summ: pd.DataFrame, out: Path, kind: str):
+def fig_sweep(summ: pd.DataFrame, out: Path, kind: str, metric: str = "brown", suffix: str = ""):
     dags = sorted(summ.dag.unique())
     fig, axes = plt.subplots(2, len(dags), figsize=(max(9.0, 5.2 * len(dags)), 5.8), squeeze=False,
                              gridspec_kw={"height_ratios": [3, 1.3]}, sharex="col")
@@ -179,18 +198,18 @@ def fig_sweep(summ: pd.DataFrame, out: Path, kind: str):
             s = summ[(summ.dag == dag) & np.isclose(summ.alpha, 2.0)]
             x, logx, title = "data_size_gb", True, f"{dag}: data-volume sweep (D = 2.0·M)"
         _method_lines(axes[0][j], s, x, logx)
-        axes[0][j].set_title(title)
+        axes[0][j].set_title(f"{title}, {metric} metric")
         _choice_strip(axes[1][j], s, x, logx)
         axes[1][j].set_xlabel("Deadline factor α (D = α·M$_{HEFT}$)" if kind == "deadline" else "Input data Δ (GB)")
     h, l = axes[0][0].get_legend_handles_labels()
     fig.legend(h, l, loc="upper center", ncol=3, fontsize=8, bbox_to_anchor=(0.5, 1.0))
     _footer(fig, _source(summ))
     fig.tight_layout(rect=(0, 0.03, 1, 0.9))
-    fig.savefig(out / f"fig_{'deadline' if kind == 'deadline' else 'datasize'}.png", dpi=180)
+    fig.savefig(out / f"fig_{'deadline' if kind == 'deadline' else 'datasize'}{suffix}.png", dpi=180)
     plt.close(fig)
 
 
-def fig_heatmap(summ: pd.DataFrame, out: Path):
+def fig_heatmap(summ: pd.DataFrame, out: Path, metric: str = "brown", suffix: str = ""):
     dags = sorted(summ.dag.unique())
     fig, axes = plt.subplots(1, len(dags), figsize=(5.4 * len(dags), 4.2), squeeze=False)
     for ax, dag in zip(axes[0], dags):
@@ -221,10 +240,10 @@ def fig_heatmap(summ: pd.DataFrame, out: Path):
         ax.set_xlabel("Deadline factor α")
         ax.set_ylabel("Input data Δ")
         ax.grid(False)
-        ax.set_title(f"{dag}: DC chosen by Ours (+T$_{{net}}$ wait, gain vs B3)")
+        ax.set_title(f"{dag}: DC chosen by Ours (+T$_{{net}}$ wait, gain vs B3), {metric} metric", fontsize=9)
     _footer(fig, _source(summ))
     fig.tight_layout(rect=(0, 0.03, 1, 1))
-    fig.savefig(out / "fig_heatmap.png", dpi=180)
+    fig.savefig(out / f"fig_heatmap{suffix}.png", dpi=180)
     plt.close(fig)
 
 
@@ -269,36 +288,51 @@ def fig_ablation(hs: pd.DataFrame, out: Path):
 
 
 def fig_sensitivity(ss: pd.DataFrame, gs: pd.DataFrame | None, out: Path):
-    """kappa, bandwidth, eps_net (post hoc) and forecast error: Ours vs B3 vs B1 (brown metric)."""
-    show = ["Ours", "B3", "B1"]
-    fig, axes = plt.subplots(1, 4, figsize=(14, 3.9))
-    base = ss[(ss.metric == "brown") & np.isclose(ss.eps_kwh_per_gb, 0.02)]
+    """kappa, bandwidth, eps_net (post hoc) and forecast error, as the gain of Ours over B3 (%), for
+    both compute metrics.  C1 (B3 with Ours' solver budget) is drawn as the heuristic-noise reference.
+    Absolute totals are not plotted: B1 (~77 kg) would flatten every difference that matters."""
+    series = [("Ours", "location", SLOTS[0], "-", "Ours vs B3, location metric"),
+              ("Ours", "brown", SLOTS[1], "-", "Ours vs B3, brown metric"),
+              ("C1", "brown", TEXT2, "--", "C1 vs B3, brown (solver-noise reference)")]
+    fig, axes = plt.subplots(1, 4, figsize=(14, 3.9), sharey=True)
+    keys = ["experiment", "units_per_hour", "bandwidth_gbps", "forecast_sigma", "forecast_seed", "eps_kwh_per_gb"]
+
+    def gains(d, m, metric, x):
+        d = d[d.metric == metric]
+        idx = list(dict.fromkeys([k for k in keys if k in d] + [x]))
+        d = d.assign(**{k: d[k].fillna(-1) for k in idx})  # pivot_table would drop NaN keys
+        piv = d.pivot_table(index=idx, columns="method", values="total_gco2", aggfunc="first")
+        if m not in piv or "B3" not in piv:
+            return pd.DataFrame()
+        g = (1 - piv[m] / piv["B3"]).where(piv["B3"] > 0) * 100
+        return g.rename("g").reset_index()
 
     def lines(ax, d, x, xlabel, logx=False):
-        for m in show:
-            q = d[d.method == m].groupby(x).total_gco2.agg(["mean", "min", "max"]).reset_index()
-            if q.empty:
+        for m, metric, color, ls, label in series:
+            g = gains(d, m, metric, x)
+            if g.empty or g.g.isna().all():
                 continue
-            ax.plot(q[x], q["mean"] / 1e3, marker=METHOD_MARK[m], color=METHOD_COLOR[m], ms=6,
-                    markeredgecolor=SURFACE, lw=2.4 if m == "Ours" else 1.4, label=_label(m))
+            q = g.groupby(x).g.agg(["mean", "min", "max"]).reset_index()
+            ax.plot(q[x], q["mean"], ls, marker="o" if m == "Ours" else None, color=color, ms=5,
+                    markeredgecolor=SURFACE, lw=2.2 if m == "Ours" else 1.2, label=label)
             if (q["max"] > q["min"]).any():
-                ax.fill_between(q[x], q["min"] / 1e3, q["max"] / 1e3, color=METHOD_COLOR[m], alpha=0.12, lw=0)
+                ax.fill_between(q[x], q["min"], q["max"], color=color, alpha=0.12, lw=0)
+        ax.axhline(0, color=TEXT2, lw=0.8)
         ax.set_xlabel(xlabel)
         if logx:
             ax.set_xscale("log")
-        ax.set_ylim(bottom=0)
 
+    base = ss[np.isclose(ss.eps_kwh_per_gb, 0.02)]
     k = base[base.experiment == "kappa"].assign(kappa_s=lambda t: 3600 / t.units_per_hour)
     lines(axes[0], k, "kappa_s", "κ (seconds per CWM unit)")
-    axes[0].set_ylabel("Total carbon (kgCO$_2$)")
+    axes[0].set_ylabel("Gain over B3 (%)")
     axes[0].set_title("Time scale κ")
     bw = pd.concat([base[base.experiment == "bandwidth"], k[np.isclose(k.units_per_hour, 30)]])
     lines(axes[1], bw, "bandwidth_gbps", "WAN bandwidth (Gbps)", logx=True)
     axes[1].set_title("Bandwidth")
     if gs is not None:
-        e = gs[(gs.metric == "brown") & (gs.dag == "eager1000") & (gs.data_size_gb == 1000.0)
-               & np.isclose(gs.alpha, 2.0)]
-        lines(axes[2], e, "eps_kwh_per_gb", "ε$_{net}$ (kWh/GB)", logx=True)
+        e = gs[(gs.dag == "eager1000") & (gs.data_size_gb == 1000.0) & np.isclose(gs.alpha, 2.0)]
+        lines(axes[2], e.assign(experiment="grid"), "eps_kwh_per_gb", "ε$_{net}$ (kWh/GB)", logx=True)
     axes[2].set_title("Network energy intensity (post hoc)")
     fc = base[base.experiment == "forecast"]
     oracle = k[np.isclose(k.units_per_hour, 30)].assign(forecast_sigma=0.0)
@@ -306,7 +340,8 @@ def fig_sensitivity(ss: pd.DataFrame, gs: pd.DataFrame | None, out: Path):
     axes[3].set_title("Decisions on noisy forecasts\n(realised carbon; band = seed range)")
     h, l = axes[0].get_legend_handles_labels()
     fig.legend(h, l, loc="upper center", ncol=3, fontsize=8, bbox_to_anchor=(0.5, 1.0))
-    fig.suptitle(f"eager1000, Δ = 1 TB, D = 2.0·M", y=0.9, fontsize=9, color=TEXT2)
+    fig.suptitle("eager1000, Δ = 1 TB, D = 2.0·M (gain = 1 − method/B3; below 0 = worse than B3)",
+                 y=0.9, fontsize=9, color=TEXT2)
     _footer(fig, _source(ss))
     fig.tight_layout(rect=(0, 0.03, 1, 0.84))
     fig.savefig(out / "fig_sensitivity.png", dpi=180)
@@ -369,8 +404,8 @@ def fig_attenuation(out: Path):
 TABLE_METHODS = ["B1", "B2", "B3", "B4", "B5", "A1", "A2", "C1"]
 
 
-def gains_table(summ: pd.DataFrame) -> pd.DataFrame:
-    keys = ["dag", "start_hour", "data_size_gb", "alpha"]
+def gains_table(summ: pd.DataFrame, keys=("dag", "start_hour", "data_size_gb", "alpha")) -> pd.DataFrame:
+    keys = list(keys)
     piv = summ.pivot_table(index=keys, columns="method", values="total_gco2", aggfunc="first")
     rows = []
     for m in TABLE_METHODS:
@@ -392,7 +427,11 @@ def headline_md(summ: pd.DataFrame, out: Path, name: str):
     src = _source(summ)
     lines += [("> **Synthetic carbon-intensity data**: development results, not empirical findings."
                if src == "synthetic" else f"> {_ci_note(src)}"), ""]
-    for metric in ("brown", "location"):
+    lines += _solver_warning(out)
+    lines += ["Primary metric: **location** (marginal, location-based compute carbon). The **brown** metric is "
+              "CWM's native objective; it is zero for any DC whose green budget covers the job, whatever that "
+              "grid's CI, so it can favour a dirtier grid and is reported as secondary.", ""]
+    for metric in ("location", "brown"):
         d = summ[(summ.metric == metric) & np.isclose(summ.eps_kwh_per_gb, 0.02)]
         if d.empty:
             continue
@@ -404,24 +443,155 @@ def headline_md(summ: pd.DataFrame, out: Path, name: str):
         nm = o.nonmono_drops.sum() / max(1, o.nonmono_steps.sum())
         lines += [f"- Ours vs separable bound: median gap {100 * gap.median():.1f}% (max {100 * gap.max():.1f}%)",
                   f"- CWM non-monotonicity (Prop. 1 violations): {100 * nm:.1f}% of consecutive arrival steps", ""]
-    d = summ[(summ.metric == "brown") & np.isclose(summ.eps_kwh_per_gb, 0.02)]
-    per = d.pivot_table(index=keys, columns="method", values="total_gco2", aggfunc="first") / 1e3
-    per = per[[m for m in METHODS + ["A1", "A2", "C1"] if m in per]]
-    ours = d[d.method == "Ours"].set_index(keys)
-    per["Ours DC"] = ours.dc.map(DC_SHORT)
-    per["Ours T_net (h)"] = ours.t_net_h.round(2)
-    lines += ["## Per problem, brown metric (total kgCO₂)", "", per.round(2).to_markdown(), ""]
-    eps = summ[(summ.metric == "brown") & (summ.method.isin(["Ours", "B3"]))]
-    if eps.eps_kwh_per_gb.nunique() > 1:
-        lines += ["## ε_net sweep (brown metric, post hoc): gain of Ours over B3", ""]
-        rows = []
+    for metric in ("location", "brown"):
+        d = summ[(summ.metric == metric) & np.isclose(summ.eps_kwh_per_gb, 0.02)]
+        if d.empty:
+            continue
+        per = d.pivot_table(index=keys, columns="method", values="total_gco2", aggfunc="first") / 1e3
+        per = per[[m for m in METHODS + ["A1", "A2", "C1"] if m in per]]
+        ours = d[d.method == "Ours"].set_index(keys)
+        per["Ours DC"] = ours.dc.map(DC_SHORT)
+        per["Ours T_net (h)"] = ours.t_net_h.round(2)
+        lines += [f"## Per problem, {metric} metric (total kgCO₂)", "", per.round(2).to_markdown(), ""]
+    rows = []
+    for metric in ("location", "brown"):
+        eps = summ[(summ.metric == metric) & (summ.method.isin(["Ours", "B3"]))]
         for e, g in eps.groupby("eps_kwh_per_gb"):
             piv = g.pivot_table(index=keys, columns="method", values="total_gco2", aggfunc="first")
             gg = _gain(piv, "B3")
-            rows.append({"eps_kwh_per_gb": e, "n": len(gg), "mean_gain_%": 100 * gg.mean(),
+            rows.append({"metric": metric, "eps_kwh_per_gb": e, "n": len(gg), "mean_gain_%": 100 * gg.mean(),
                          "share_gain>=5%": (gg >= 0.05).mean()})
-        lines += [pd.DataFrame(rows).round(3).to_markdown(index=False), ""]
+    if len({r["eps_kwh_per_gb"] for r in rows}) > 1:
+        lines += ["## ε_net sweep (post hoc): gain of Ours over B3", "",
+                  pd.DataFrame(rows).round(3).to_markdown(index=False), ""]
     (out / f"{name}.md").write_text("\n".join(lines))
+
+
+MD_KEYS = ["ci_date", "dag", "start_hour", "data_size_gb", "alpha"]
+
+
+def _md_pivots(ms: pd.DataFrame, metric: str, eps: float = 0.02):
+    d = ms[(ms.metric == metric) & np.isclose(ms.eps_kwh_per_gb, eps)]
+    piv = d.pivot_table(index=MD_KEYS, columns="method", values="total_gco2", aggfunc="first")
+    ours = d[d.method == "Ours"].set_index(MD_KEYS)
+    b3 = d[d.method == "B3"].set_index(MD_KEYS)
+    return d, piv, ours, b3
+
+
+def _pct(s: pd.Series) -> str:
+    return "–" if s.empty else f"{100 * s.mean():.1f} / {100 * s.median():.1f} / {100 * s.max():.1f}"
+
+
+def multidate_md(ms: pd.DataFrame, out: Path, info: dict):
+    """Tables for the multi-date study: the single-date analysis, repeated over dates x start hours."""
+    dates = info.get("dates", sorted(ms.ci_date.unique()))
+    n_prob = ms[MD_KEYS].drop_duplicates().shape[0]
+    lines = ["# multidate", "",
+             f"> Carbon intensity: {info.get('label', '')} historical hourly data; {len(dates)} dates "
+             f"({dates[0]} … {dates[-1]}, third Wednesday of each month), start hours "
+             f"{'/'.join(str(h) for h in info.get('start_hours_utc', []))} UTC. "
+             f"{n_prob} problems, one CWM seed each (no C1 control).", ""]
+    lines += _solver_warning(out)
+    for metric in ("location", "brown"):
+        d, piv, ours, b3 = _md_pivots(ms, metric)
+        if d.empty:
+            continue
+        lines += [f"## {metric} metric, ε = 0.02 kWh/GB: gain = 1 − Ours/other", "",
+                  gains_table(d, MD_KEYS).round(3).to_markdown(index=False), ""]
+        wait = ours.t_net_h > 0
+        g_b3, g_a1 = _gain(piv, "B3"), _gain(piv, "A1")
+        same_dc = ours.dc == b3.dc
+        dnet = (b3.net_gco2 - ours.net_gco2)[wait & same_dc]
+        dcomp = (b3.comp_gco2 - ours.comp_gco2)[wait & same_dc]
+        lines += [f"- Ours waits (T_net > 0) in {int(wait.sum())} of {len(wait)} problems "
+                  f"({100 * wait.mean():.0f}%); Ours picks the same DC as B3 in {100 * same_dc.mean():.0f}%.",
+                  f"- Value of waiting (gain vs A1, mean / median / max %): all {_pct(g_a1)}; "
+                  f"where Ours waits {_pct(g_a1[wait.reindex(g_a1.index, fill_value=False)])}.",
+                  f"- Where Ours waits at B3's DC ({len(dnet)} problems): network saving vs B3 "
+                  f"{dnet.sum() / 1e3:.2f} kg in total, compute change {-dcomp.sum() / 1e3:+.2f} kg "
+                  f"(compute got worse in {int((dcomp < -1e-9).sum())}, better in {int((dcomp > 1e-9).sum())}).",
+                  ""]
+        rows = []
+        for (label, col) in (("month", "ci_date"), ("start hour (UTC)", "start_hour"), ("DAG", "dag"),
+                             ("Δ (GB)", "data_size_gb"), ("α", "alpha")):
+            for v in sorted(ours.reset_index()[col].unique()):
+                idx = ours.index.get_level_values(col) == v
+                sub = ours[idx]
+                gb = g_b3[g_b3.index.get_level_values(col) == v]
+                ga = g_a1[g_a1.index.get_level_values(col) == v]
+                rows.append({"by": label, "value": v[:7] if col == "ci_date" else v, "n": int(idx.sum()),
+                             "gain vs B3 mean %": 100 * gb.mean(), "gain vs B3 max %": 100 * gb.max(),
+                             "gain vs A1 mean %": 100 * ga.mean(), "share waiting": (sub.t_net_h > 0).mean(),
+                             "mean T_net (h) when waiting": sub.t_net_h[sub.t_net_h > 0].mean(),
+                             "Ours DCs": ", ".join(f"{DC_SHORT.get(k, k)} {n}" for k, n in sub.dc.value_counts().items())})
+        lines += [f"### {metric}: breakdown", "", pd.DataFrame(rows).round(2).to_markdown(index=False), ""]
+    rows = []
+    for metric in ("location", "brown"):
+        for e in sorted(ms.eps_kwh_per_gb.unique()):
+            _, piv, ours, _ = _md_pivots(ms, metric, e)
+            g = _gain(piv, "B3")
+            rows.append({"metric": metric, "eps_kwh_per_gb": e, "mean gain vs B3 %": 100 * g.mean(),
+                         "share gain>=5%": (g >= 0.05).mean(), "share waiting": (ours.t_net_h > 0).mean()})
+    lines += ["## ε_net sweep (post hoc)", "", pd.DataFrame(rows).round(3).to_markdown(index=False), ""]
+    (out / "multidate.md").write_text("\n".join(lines))
+
+
+def fig_multidate(ms: pd.DataFrame, out: Path, info: dict):
+    """Month x start hour: mean gain of Ours over B3 (left) and over A1 = value of waiting (right)."""
+    fig, axes = plt.subplots(2, 2, figsize=(11, 7.6), sharex=True, sharey=True)
+    cmap = plt.get_cmap("Blues")
+    vmax = 0.0
+    grids = {}
+    for metric in ("location", "brown"):
+        _, piv, _, _ = _md_pivots(ms, metric)
+        for m in ("B3", "A1"):
+            g = _gain(piv, m).rename("g").reset_index()
+            g["month"] = g.ci_date.str[:7]
+            tab = g.pivot_table(index="month", columns="start_hour", values="g", aggfunc="mean") * 100
+            grids[(metric, m)] = tab
+            vmax = max(vmax, np.nanmax(tab.values) if tab.size else 0)
+    vmax = max(5.0, float(np.ceil(vmax / 5) * 5))
+    for i, metric in enumerate(("location", "brown")):
+        for j, m in enumerate(("B3", "A1")):
+            ax, tab = axes[i, j], grids[(metric, m)]
+            im = ax.imshow(tab.values, cmap=cmap, vmin=0, vmax=vmax, aspect="auto")
+            for (r, c), v in np.ndenumerate(tab.values):
+                if np.isfinite(v):
+                    ax.text(c, r, f"{v:.0f}", ha="center", va="center", fontsize=7,
+                            color="white" if v > 0.6 * vmax else TEXT2)
+            ax.set_xticks(range(len(tab.columns)), [f"{h:02d}:00" for h in tab.columns])
+            ax.set_yticks(range(len(tab.index)), [dt_month(s) for s in tab.index])
+            what = "gain vs B3 (greenest DC, transfer now)" if m == "B3" else "gain vs A1 (value of waiting)"
+            ax.set_title(f"{metric} metric: {what}", fontsize=9)
+            ax.grid(False)
+            if i == 1:
+                ax.set_xlabel("Submission hour (UTC)")
+    cb = fig.colorbar(im, ax=axes, shrink=0.8, pad=0.02)
+    cb.set_label("mean gain over DAGs, Δ and α (%)")
+    dates = info.get("dates", [])
+    fig.suptitle("Ours vs B3 and A1 across 2024 (third Wednesday of each month), ε = 0.02 kWh/GB", fontsize=10)
+    note = (f"Carbon intensity: {info.get('label', '')} historical hourly data, "
+            f"{len(dates)} dates. Each cell: mean over atacseq200/eager1000 × Δ ∈ {{100 GB, 1 TB}} × α ∈ {{1.5, 2, 2.5}}.")
+    import textwrap
+    fig.text(0.01, 0.005, textwrap.fill(note, 180), color=TEXT2, fontsize=7, ha="left", va="bottom")
+    fig.savefig(out / "fig_multidate.png", dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def dt_month(s: str) -> str:
+    import calendar as _cal
+    return _cal.month_abbr[int(s[5:7])]
+
+
+def make_multidate(md_dir: Path):
+    f = md_dir / "multidate_summary.csv"
+    if not f.exists():
+        return
+    ms = pd.read_csv(f)
+    info_f = md_dir / "dates.json"
+    info = json.loads(info_f.read_text()) if info_f.exists() else {}
+    multidate_md(ms, md_dir, info)
+    fig_multidate(ms, md_dir, info)
 
 
 def make_all(results: Path):
@@ -431,12 +601,15 @@ def make_all(results: Path):
     if (results / "grid_summary.csv").exists():
         gs_all = pd.read_csv(results / "grid_summary.csv")
         gs = gs_all
-        main = gs_all[(gs_all.metric == "brown") & np.isclose(gs_all.eps_kwh_per_gb, 0.02)]
         ge = pd.read_csv(results / "grid_evals.csv")
-        fig_pareto(ge, main, results, dags=["eager1000"] if "eager1000" in set(ge.dag) else None)
-        fig_sweep(main, results, "deadline")
-        fig_sweep(main, results, "datasize")
-        fig_heatmap(main, results)
+        # location is the primary metric (fig_*.png); brown copies are fig_*_brown.png
+        for metric, suffix in (("location", ""), ("brown", "_brown")):
+            main = gs_all[(gs_all.metric == metric) & np.isclose(gs_all.eps_kwh_per_gb, 0.02)]
+            fig_pareto(ge, main, results, dags=["eager1000"] if "eager1000" in set(ge.dag) else None,
+                       metric=metric, suffix=suffix)
+            fig_sweep(main, results, "deadline", metric, suffix)
+            fig_sweep(main, results, "datasize", metric, suffix)
+            fig_heatmap(main, results, metric, suffix)
         headline_md(gs_all, results, "grid_gains")
     if (results / "headline_summary.csv").exists():
         hs = pd.read_csv(results / "headline_summary.csv")
@@ -445,4 +618,6 @@ def make_all(results: Path):
     if (results / "sensitivity_summary.csv").exists():
         fig_sensitivity(pd.read_csv(results / "sensitivity_summary.csv"), gs, results)
     fig_attenuation(results)
+    _style()
+    make_multidate(results / "multidate")
     print(f"figures/tables written to {results}")

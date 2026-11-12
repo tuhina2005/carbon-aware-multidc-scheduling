@@ -5,6 +5,7 @@ Usage (from the repository root):
     python -m cwm_multidc.experiments grid         # heatmap grid (sweeps are slices of it)
     python -m cwm_multidc.experiments headline     # Ours vs baselines + ablations + equal-budget control
     python -m cwm_multidc.experiments sensitivity  # time scale kappa, bandwidth, CI forecast error
+    python -m cwm_multidc.experiments multidate --ci-dir DIR   # same problems over 12 dates x 4 start hours
     python -m cwm_multidc.experiments plot         # figures + tables from the CSVs
 
 All solver calls go through a persistent cache (``results/cache.jsonl``), so every
@@ -21,12 +22,14 @@ Outputs in ``cwm_multidc/results/``:
 from __future__ import annotations
 
 import argparse
+import calendar
 import csv
 import itertools
 import json
 import math
 import threading
 import time
+import datetime as dt
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
@@ -84,8 +87,25 @@ class CIConfig:
         results.mkdir(parents=True, exist_ok=True)
         info = {"label": self.label, "start_utc": self.start_utc, "offset_hours": self.offset,
                 "dcs": [list(d) for d in self.dcs],
-                "files": {r: str(p) for r, p in (self.ci_csv or {}).items()}}
+                "files": {r: str(p) for r, p in (self.ci_csv or {}).items()},
+                **provenance()}
         (results / CI_SOURCE_FILE).write_text(json.dumps(info, indent=2) + "\n")
+
+def provenance() -> dict:
+    """Which code produced a results folder: solver build and git commit (dirty if uncommitted)."""
+    import subprocess
+    from .cwm_runner import DEPLOY_DIR, file_sha256
+
+    def git(*a):
+        try:
+            return subprocess.run(["git", *a], cwd=REPO_ROOT, capture_output=True, text=True, timeout=10).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    solver = DEPLOY_DIR / "solve_cwm"
+    return {"solver_sha256": file_sha256(solver) if solver.exists() else None,
+            "git_commit": git("rev-parse", "HEAD") or None,
+            "git_dirty": bool(git("status", "--porcelain", "--untracked-files=no"))}
+
 
 GRID_DAGS = ("atacseq200", "eager1000")
 DATA_SIZES_GB = (100.0, 300.0, 1000.0, 3000.0, 10000.0)
@@ -106,11 +126,28 @@ SENS_BANDWIDTH = (0.5, 1.0, 2.0, 5.0, 10.0)  # Gbps
 SENS_FORECAST_SIGMA = (0.0, 0.1, 0.25, 0.5)
 SENS_FORECAST_SEEDS = (0, 1, 2)
 
+# Multi-date study (real CI only): does the single-date picture hold across seasons and times of day?
+MD_DAGS = ("atacseq200", "eager1000")
+MD_SIZES_GB = (100.0, 1000.0)
+MD_ALPHAS = (1.5, 2.0, 2.5)
+MD_START_HOURS = (0, 6, 12, 18)
+MD_DIR = "multidate"
+
+
+def third_wednesdays(year: int = 2024) -> tuple[str, ...]:
+    """One weekday per month, the same weekday as DEFAULT_CI_START (third Wednesday)."""
+    out = []
+    for m in range(1, 13):
+        weds = [d for d in calendar.Calendar().itermonthdates(year, m) if d.month == m and d.weekday() == 2]
+        out.append(weds[2].isoformat())
+    return tuple(out)
+
+
 METRICS = ("brown", "location")
 
 SUMMARY_FIELDS = ["experiment", "dag", "start_hour", "data_size_gb", "alpha", "deadline_units", "m_ref_units",
                   "units_per_hour", "bandwidth_gbps", "forecast_sigma", "forecast_seed", "metric", "eps_kwh_per_gb",
-                  "synthetic_ci", "ci_source", "greenest_dc", "method", "dc", "t_net_h", "scheduler", "net_gco2", "comp_gco2",
+                  "synthetic_ci", "ci_source", "ci_date", "greenest_dc", "method", "dc", "t_net_h", "scheduler", "net_gco2", "comp_gco2",
                   "total_gco2", "comp_brown_kwh", "comp_dyn_kwh", "d_prime_units", "n_evals", "n_cwm_calls",
                   "separable_bound_gco2", "nonmono_drops", "nonmono_steps"]
 
@@ -161,23 +198,25 @@ def summary_rows(res: SearchResult, meta: dict, eps_values=EPS_SWEEP) -> list[di
 
 
 class Runner:
-    def __init__(self, tag: str, ci: CIConfig):
-        RESULTS.mkdir(parents=True, exist_ok=True)
-        ci.write(RESULTS)
+    def __init__(self, tag: str, ci: CIConfig, out: Path = RESULTS):
+        out.mkdir(parents=True, exist_ok=True)
+        ci.write(out)
         self.tag, self.ci = tag, ci
-        self.cwm = CWMRunner(cache=ResultCache(RESULTS / "cache.jsonl"))
-        self.evals_w = _Writer(RESULTS / f"{tag}_evals.csv", None)
-        self.summ_w = _Writer(RESULTS / f"{tag}_summary.csv", SUMMARY_FIELDS)
+        self.cwm = CWMRunner(cache=ResultCache(RESULTS / "cache.jsonl"))  # one cache for every study
+        self.evals_w = _Writer(out / f"{tag}_evals.csv", None)
+        self.summ_w = _Writer(out / f"{tag}_summary.csv", SUMMARY_FIELDS)
         self.t0 = time.time()
         self.done = 0
         self.lock = threading.Lock()
 
-    def topology(self, dag_path: Path, start: int, ts: TimeScale, bandwidth: float = 1.0):
+    def topology(self, dag_path: Path, start: int, ts: TimeScale, bandwidth: float = 1.0,
+                 ci: CIConfig | None = None):
+        ci = ci or self.ci
         m = self.cwm.heft_makespan(dag_path)
         alpha_max = max(ALPHAS + HEADLINE_ALPHAS)
         hours = int(math.ceil(alpha_max * m / ts.units_per_hour)) + 2
-        return build_topology(hours, DEFAULT_CLUSTER, dcs=self.ci.dcs, ci_csv=self.ci.ci_csv,
-                              start_hour=self.ci.offset + start,
+        return build_topology(hours, DEFAULT_CLUSTER, dcs=ci.dcs, ci_csv=ci.ci_csv,
+                              start_hour=ci.offset + start,
                               timescale=ts, bandwidth_gbps=bandwidth)
 
     def log(self, total: int, msg: str):
@@ -186,7 +225,7 @@ class Runner:
             print(f"[{self.tag} {self.done}/{total} {time.time() - self.t0:6.0f}s] {msg}", flush=True)
 
     def record(self, res: SearchResult, meta: dict):
-        meta = dict(meta, ci_source=self.ci.label)
+        meta = {"ci_source": self.ci.label, "ci_date": self.ci.start_utc, **meta}
         self.evals_w.write([dict(r, **meta) for r in res.records()])
         self.summ_w.write(summary_rows(res, meta))
 
@@ -274,6 +313,33 @@ def cmd_sensitivity(args) -> None:
         list(ex.map(one, jobs))
 
 
+def cmd_multidate(args) -> None:
+    if args.ci_dir is None:
+        raise SystemExit("multidate needs real CI: pass --ci-dir")
+    dates = tuple(args.dates.split(",")) if args.dates else third_wednesdays()
+    cis = {d: CIConfig(args.ci_dir, d) for d in dates}
+    R = Runner("multidate", cis[dates[0]], RESULTS / MD_DIR)
+    (RESULTS / MD_DIR / "dates.json").write_text(json.dumps(
+        {"dates": list(dates), "start_hours_utc": list(MD_START_HOURS),
+         "label": cis[dates[0]].label.rsplit("@", 1)[0]}, indent=2) + "\n")
+    # cheapest problems first, so a partial run already covers every date
+    jobs = sorted(itertools.product(dates, MD_START_HOURS, MD_DAGS, MD_SIZES_GB, MD_ALPHAS),
+                  key=lambda j: (MD_DAGS.index(j[2]), j[0], j[1], j[3], j[4]))
+
+    def one(job):
+        date, start, dag, size, alpha = job
+        ci = cis[date]
+        dag_path = DAG_DIR / f"{dag}.dot"
+        topo = R.topology(dag_path, start, TimeScale(), ci=ci)
+        res = solve(Problem(dag_path, topo, size, alpha=alpha, seeds=(42,), equal_budget_control=False), R.cwm)
+        R.record(res, {"experiment": "multidate", "start_hour": start, "bandwidth_gbps": 1.0,
+                       "ci_source": ci.label, "ci_date": date})
+        R.log(len(jobs), f"{date} {dag} start={start} D={size:g}GB a={alpha}: {_fmt(res)}")
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        list(ex.map(one, jobs))
+
+
 def cmd_plot(_args) -> None:
     from . import plots
 
@@ -295,6 +361,10 @@ def main(argv=None) -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, fn in (("grid", cmd_grid), ("headline", cmd_headline), ("sensitivity", cmd_sensitivity)):
         sub.add_parser(name, parents=[ci_args]).set_defaults(fn=fn)
+    md = sub.add_parser("multidate", parents=[ci_args])
+    md.add_argument("--dates", default=None,
+                    help="comma-separated UTC dates (default: third Wednesday of each month of 2024)")
+    md.set_defaults(fn=cmd_multidate)
     sub.add_parser("plot").set_defaults(fn=cmd_plot)
     args = ap.parse_args(argv)
     args.fn(args)

@@ -80,10 +80,12 @@ $$\text{NetCarbon} = \epsilon_{\text{net}}\,\Delta \cdot \frac{1}{\tau_d}\int_{T
 with $\hat B = B_{\text{eff}}/8$ in **GB/s** (the earlier version multiplied by $B_d$ in Gbit/s, which is off by a factor of 8). Units: kWh/GB · GB/s · gCO₂/kWh · s = gCO₂.
 
 **Compute Carbon.** `solve_cwm --per-interval` returns, per interval of the shifted and truncated profile, the excess energy $E_j^{\text{exc}}$ and the total energy $E_j^{\text{tot}}$ (W × units). With $k(\cdot) = \kappa/3.6\times10^{6}$ converting W·unit to kWh:
-- *Brown* (CWM's own objective, primary): $\text{CompCarbon}^{\text{brown}} = \sum_j k(E_j^{\text{exc}})\,\text{CI}_{d,j^*+j}$.
-- *Marginal location-based* (secondary): $\text{CompCarbon}^{\text{loc}} = \sum_j k(E_j^{\text{tot}} - P_{\text{idle}}|I_j|)\,\text{CI}_{d,j^*+j}$.
+- *Marginal location-based* (**primary**): $\text{CompCarbon}^{\text{loc}} = \sum_j k(E_j^{\text{tot}} - P_{\text{idle}}|I_j|)\,\text{CI}_{d,j^*+j}$.
+- *Brown* (CWM's native objective, secondary): $\text{CompCarbon}^{\text{brown}} = \sum_j k(E_j^{\text{exc}})\,\text{CI}_{d,j^*+j}$.
 
-Caveat: the green budget is itself derived from CI, so the brown metric weights CI roughly quadratically, and it is zero for any DC that stays under budget whatever its grid CI. It measures "brown energy beyond a notional green allocation, priced at grid-average CI", not physical emissions. The location-based metric is reported alongside it for that reason.
+Why location is primary: the green budget is itself derived from CI, so the brown metric weights CI roughly quadratically, and it is **zero for any DC that stays under budget whatever its grid CI**. On the real data this makes the brown metric prefer Frankfurt (≈320 gCO₂/kWh) over Paris (≈36) for the small atacseq200 DAG, because Frankfurt's budget happens to cover it; every "100 %" brown-metric gain in the results is this effect. The brown metric measures "brown energy beyond a notional green allocation, priced at grid-average CI", not physical emissions.
+
+**Objective mismatch (inner solver).** CWM minimises brown *energy* $\sum_j E_j^{\text{exc}}$, unweighted. Neither reported metric is CWM's objective: both weight energy by the hour's CI, and the location metric also counts energy under the budget. So the inner solver can return a schedule that is worse in carbon than plain HEFT. Observed on the real-data grid: at Frankfurt, eager1000 with α = 1.4–1.6, CWM's schedule has 24–26 % less brown energy than HEFT's (185–191 vs 250 kWh) but 3.5–4.6 % more brown carbon (89–90 vs 86 kg). B2 (HEFT) is outside Ours' search space and beats it in these rows. A CI-weighted inner objective is future work.
 
 **Budget mapping** (identical for all DCs): $\mathcal{G}_{d,j} = P_{\text{idle}} + \max(0, 1 - \text{CI}_{d,j}/800)\cdot f\cdot P_{\text{dyn}}$, with $f = 0.2$ (small) / $0.4$ (large). The floor $\mathcal{G} \ge P_{\text{idle}}$ is what makes Prop. 1 hold.
 
@@ -107,19 +109,25 @@ Let $C^*_d(a)$ be the *optimal* compute carbon for arrival unit $a$, and $f_d(T)
 
 **Assumption A (idle covered).** $\mathcal{G}_{d,j} \ge P_{\text{idle}}$ for all $d, j$ (guaranteed by the budget mapping).
 
-**Proposition 1 (monotone compute).** Under A, $C^*_d(a)$ is non-decreasing in $a$.
-*Proof.* A schedule feasible for arrival $a_2$ (all tasks in $[a_2, D)$) is feasible for $a_1 \le a_2$, since the absolute end $D$ is the same. Under A, idle power never exceeds the budget, so a schedule's brown energy depends only on its busy periods, not on the window $[a, D)$. Hence the feasible set only shrinks and the cost of each schedule is unchanged. ∎
-This is the formal content of the *deadline tension*: waiting can lower NetCarbon but can never lower $C^*$. **The CWM heuristic violates Prop. 1 empirically** (compute carbon drops in about 19% of consecutive arrival steps on our grid). Comparisons must therefore control for best-of-N selection over heuristic noise (baseline C1).
+**Proposition 1 (monotone compute).** Under A, $C^*_d(a)$ is non-decreasing in $a$ for the brown metric. For the location metric it holds without A.
+*Proof.* A schedule feasible for arrival $a_2$ (all tasks in $[a_2, D)$) is feasible for $a_1 \le a_2$, since the absolute end $D$ is the same. Under A, idle power never exceeds the budget, so a schedule's brown energy depends only on its busy periods, not on the window $[a, D)$. The location metric subtracts idle power by definition, so it depends only on busy periods with or without A. In both cases the feasible set only shrinks as $a$ grows and the cost of each schedule is unchanged. ∎
+This is the formal content of the *deadline tension*: waiting can lower NetCarbon but can never lower $C^*$. **The CWM heuristic violates Prop. 1 empirically**: on the real-data runs, compute carbon drops in 12–18 % of consecutive arrival steps under the brown metric and 15–34 % under the location metric. Comparisons must therefore control for best-of-N selection over heuristic noise (baseline C1). On the real data every waiting gain of Ours over B3 is a *network* saving, with compute carbon flat or higher (consistent with Prop. 1), so it is not heuristic noise (single-date grid, brown metric).
 
-**Proposition 2 (network breakpoints).** $\frac{d}{dT}\text{NetCarbon}_d(T) = \frac{\epsilon\Delta}{\tau_d}\big(\text{CI}^{\text{net}}(T+\tau_d) - \text{CI}^{\text{net}}(T)\big)$ is piecewise constant for piecewise-constant hourly CI. So NetCarbon is piecewise linear, and its minimum over $[0, T^{\max}]$ lies in $\{0, T^{\max}\} \cup \{kh\} \cup \{kh - \tau_d\}$. Note that the start time need not lie on a CI boundary: either the start or the arrival does, or it is an endpoint. This holds for NetCarbon only; the total has no such guarantee.
+**Proposition 2 (network breakpoints).** $\frac{d}{dT}\text{NetCarbon}_d(T) = \frac{\epsilon\Delta}{\tau_d}\big(\text{CI}^{\text{net}}(T+\tau_d) - \text{CI}^{\text{net}}(T)\big)$ is piecewise constant for piecewise-constant hourly CI. So NetCarbon is piecewise linear, and its minimum over $[0, T^{\max}]$ lies in $\mathcal{B} = \{0, T^{\max}\} \cup \{kh\} \cup \{kh - \tau_d\}$. Note that the start time need not lie on a CI boundary: either the start or the arrival does, or it is an endpoint.
+
+**Corollary 2a (exact candidate set for the total).** Let $C$ be any non-decreasing function of the arrival unit (e.g. $C^*$, by Prop. 1). Then $f_d(T) = \text{NetCarbon}_d(T) + C(\lceil (T+\tau_d)/\kappa \rceil)$ attains its minimum on the finite set $\mathcal{B} \cup \{a\kappa - \tau_d : a \in \mathbb{Z}\} \cap [0, T^{\max}]$. Moreover, on any interval between consecutive points of $\mathcal{B}$ where NetCarbon is non-decreasing, only the left endpoint is needed; every arrival-unit boundary is needed only where NetCarbon is decreasing.
+*Proof.* On each cell $((a-1)\kappa - \tau_d,\ a\kappa - \tau_d]$ the compute term is constant and NetCarbon is piecewise linear with kinks in $\mathcal{B}$, so the cell's minimum is at a kink or a cell endpoint; the open left end is dominated by the previous cell's right endpoint, whose compute term is no larger because $C$ is non-decreasing. Where NetCarbon is non-decreasing, moving later raises both terms. ∎
+Our algorithm evaluates $\mathcal{B}$ only. It is therefore exact for NetCarbon, but for the total it can miss an optimum at an arrival-unit boundary inside a segment where NetCarbon decreases. Evaluating those boundaries as well would make the outer search exact given an exact monotone inner solver; with CWM (heuristic, non-monotone) no optimality guarantee holds either way.
 
 **Proposition 3 (attenuation of temporal network shifting).** For $\text{CI}^{\text{net}}(t) = \bar c + A\cos(\omega t)$ with $\omega = 2\pi/P$, $P = 24$ h,
 $$\text{NetCarbon}(T) = \epsilon\Delta\Big[\bar c + A\,\mathrm{sinc}\big(\tfrac{\omega\tau}{2}\big)\cos\big(\omega(T + \tfrac{\tau}{2})\big)\Big],\quad \mathrm{sinc}(x) = \tfrac{\sin x}{x}.$$
-The most that waiting can save is $2\epsilon\Delta A|\mathrm{sinc}(\pi\tau/P)|$. This is zero at $\tau = P$, and waiting is feasible only if $\tau \le \kappa(D-M)$. The gain therefore peaks at intermediate data volumes and vanishes for very large ones. Synthetic DE↔NO data: the maximum saving from waiting falls from 32% (τ = 0.25 h) to 29% (2.3 h), 9.5% (8 h) and 3.4% (23.4 h).
+The most that waiting can save is $2\epsilon\Delta A|\mathrm{sinc}(\pi\tau/P)|$. This is zero at $\tau = P$, and waiting is feasible only if $\tau \le \kappa(D-M)$. Two readings: the *relative* saving ($2A|\mathrm{sinc}|/\bar c$) only falls as $\tau$ grows on $[0, P]$; the *absolute* saving $\propto \tau\,|\mathrm{sinc}(\pi\tau/P)| = (P/\pi)|\sin(\pi\tau/P)|$ peaks at $\tau = P/2$ (12 h, about 5 TB at 1 Gbps) and vanishes at $\tau = P$.
 
-**Proposition 4 (existence).** The feasible set $[0, T^{\max}]$ is compact and non-empty iff $\tau_d \le \kappa(D - M)$. NetCarbon is continuous. $T_{\text{arrival}}(T)$ uses a ceiling, which is left-continuous and lower semicontinuous, and $C^*$ is non-decreasing, so $f_d$ is lower semicontinuous and attains its minimum.
+On the real 2024 data (window from 17 April, Frankfurt→Paris), the measured maximum relative saving falls from about 61 % (τ ≤ 1 h) to 46 % (10 h), 26 % (24 h) and 23 % (36 h), while the 24 h harmonic alone predicts 47 % → 0 at 24 h. Real CI has large non-periodic (weather) variability, so Prop. 3 is a stylised explanation of the attenuation, not a quantitative model.
 
-**Complexity.** The problem contains CWM ($d = d_s$, $\Delta = 0$) and is therefore strongly NP-hard.
+**Remark (existence).** The feasible set $[0, T^{\max}]$ is non-empty iff $\tau_d \le \kappa(D - M)$, and $f_d$ attains its minimum there: the arrival unit takes finitely many values, and Corollary 2a gives a finite candidate set.
+
+**Complexity.** The problem contains CWM's problem as the special case $d = d_s$, $\Delta = 0$, so it is at least as hard. *State "NP-hard" and cite the CWM paper's hardness result; claim "strongly NP-hard" only if that paper proves strong hardness.*
 
 ---
 
@@ -161,16 +169,9 @@ Return best_solution
 
 ---
 
-## 5. OPTIONAL EXTENSION: BATTERY (from Yu et al. 2023)
+## 5. BATTERY EXTENSION: NOT IMPLEMENTED (future work)
 
-**Concept:** DCs may have battery storage that charges during green hours and discharges during brown hours, effectively augmenting the green power budget.
-
-**Simplified Model (pre-committed discharge):**
-1. Charge battery from excess green power: $c_j = \min(c_{\max}, \max(0, \mathcal{G}_{d,j} - P_{\text{base}}))$.
-2. Discharge into brownest intervals: augment $\mathcal{G}'_{d,j} = \mathcal{G}_{d,j} + d_j^{\text{battery}}$.
-3. Pass augmented profile $\mathcal{G}'_d$ to CWM.
-
-**Status:** Optional experimental parameter. Does NOT require modifying CWM. Sub-optimal but bounded. Include as an experiment, not a core contribution.
+Battery storage (charge in green hours, discharge in brown hours, i.e. an augmented budget $\mathcal{G}'_{d,j}$ passed to CWM, following Yu et al. 2023) was considered but **not implemented or evaluated**. Mention it only as future work.
 
 ---
 
@@ -190,8 +191,8 @@ Return best_solution
 
 | Data | Source | Details |
 |------|--------|---------|
-| **DAG workflows** | WfCommons (WFGen) | atacseq, bacass, chipseq, eager. 50–5000 tasks. |
-| **Carbon intensity** | Electricity Maps | Hourly CI for Norway, France, Germany, California, Poland, India. |
+| **DAG workflows** | WfCommons instances shipped with CWM | atacseq200, eager1000 (grid, multi-date); chipseq1000, methylseq1000 (headline). |
+| **Carbon intensity** | Energy-Charts (ENTSO-E) + CAISO, 2024 | Hourly production-based life-cycle CI for DE, NO, FR, PL (Energy-Charts) and US-CAL (CAISO), built by `scripts/fetch_public_ci.py` (IPCC AR5 median emission factors; storage and imports excluded; 16 CAISO hours interpolated, flagged in the CSV). India has no free hourly source, so **5 DCs** (Mumbai dropped). Electricity Maps exports can be used instead via `scripts/fetch_ci_data.py import`. |
 | **Network CI** | Derived | Endpoint average: $\text{CI}^{\text{net}}(t) = (\text{CI}_{\text{source}}(t) + \text{CI}_{\text{dest}}(t))/2$. |
 | **WAN bandwidth** | Fixed parameter | Default: 1 Gbps. Sensitivity: 0.1–10 Gbps. |
 | **Input data size $\Delta$** | Fixed parameter | Default: 1 TB. Sensitivity: 100 GB – 10 TB. |
@@ -248,7 +249,7 @@ A1/A2 against B3/Ours form the 2×2 factorial over {DC by mean CI, DC by total} 
 5. *Identical clusters and a single workflow per DC.* This isolates the carbon signal; heterogeneity and background load are future work.
 6. *CI foresight.* Decisions use CI forecasts; we evaluate decisions taken on noisy forecasts (multiplicative AR(1), σ ∈ {0.1, 0.25, 0.5}) against realised CI.
 7. *Time scale κ.* Calibrated so one CWM interval (mean length 30 units in the CWM instances) equals one hour; swept over κ ∈ {60, 120, 240} s.
-8. *Data.* Results with synthetic CI are for development only; final results require Electricity Maps hourly data (supported via `build_topology(ci_csv=...)`).
+8. *Data.* Final results use real 2024 hourly CI (Energy-Charts/ENTSO-E + CAISO, production-based, no imports): `experiments.py --ci-dir cwm_multidc/data/public_ci`. The earlier synthetic-CI results are kept in `results/synthetic/` for reference only.
 
 ## 12. IMPLEMENTATION STACK
 
@@ -257,3 +258,18 @@ A1/A2 against B3/Ours form the 2×2 factorial over {DC by mean CI, DC by total} 
 - **Data processing:** Pandas for Electricity Maps CSV manipulation.
 - **DAG generation:** WfCommons Python library.
 - **No MILP solver needed. No GPU needed.**
+
+---
+
+## 13. THREATS TO VALIDITY (to carry into the paper)
+
+1. **Network accounting drives the result.** Compute is charged marginally and network attributionally (§11.1–2), so network carbon dominates totals: at 1 TB, B3's network carbon is ≈ 4.3 kg against ≈ 0.04 kg brown compute. The headline gain over B3 (brown) falls from 19 % at ε = 0.02 kWh/GB to 6 % at ε = 0.001. ε must be justified from current per-GB estimates and presented as a sweep.
+2. **κ is a calibration, not a measurement.** eager1000, 1 TB, α = 2: gain over B3 (brown) is 23 % at κ = 240 s, 4 % at 120 s and 0 % at 60 s.
+3. **Brown metric artefact** (§3.5): it can favour a dirtier grid. Location is the primary metric.
+4. **Inner-solver objective mismatch** (§3.5): CWM minimises brown kWh, not CI-weighted carbon, so HEFT occasionally beats it on carbon.
+5. **CI data.** Production-based (imports ignored, so PL and DE are likely underestimated relative to consumption-based CI); life-cycle factors are IPCC medians, not plant-specific; 16 CAISO hours interpolated; WAN CI is the endpoint average (§11.3).
+6. **Temporal coverage.** The grid, headline and sensitivity runs use one date (17 April 2024). The multi-date study (`experiments.py multidate`: third Wednesday of each month × start hours 0/6/12/18 UTC) addresses this.
+7. **Solver nondeterminism (found and fixed; results not yet re-run).** `solve_cwm` returned different schedules for the same seed and input (e.g. 32 × 6222 and 8 × 5673 in 40 runs). Root cause, found with AddressSanitizer: a heap buffer over-read in `mapper.cpp` (6 copies of the same sweep-line loop, first hit in `CaWoMap::local_search`). When schedule events lie past the profile horizon, the loop reads `intervals[]` and `budgets[]` past their end, so the budget used beyond the horizon is whatever memory holds. The fix treats time past the horizon as having no green budget; with it, 40/40 runs agree and the sanitizers report no errors. It is inherited from the upstream CWM code. The fix is applied in `code_cwm/code/lib/algorithms/mapper.cpp` and covered by a regression test (`test_cwm_runner.TestDeterminism`); the solver cache key now includes the solver binary's SHA-256, so results from another build are never reused. **All current results were produced with the pre-fix binary** (`d849bc23…`, recorded in each `ci_source.json`; the tables print a warning) and must be re-run before submission.
+8. **Model simplifications** (§11.4–5): dedicated constant-bandwidth transfer, no output return, identical clusters, one workflow at a time, perfect CI foresight except in the forecast-noise study.
+9. **Novelty claim** (§2) still needs a systematic literature search (spatio-temporal workload shifting, carbon-aware bulk data transfer, geo-distributed workflow scheduling) before it is stated as "first".
+

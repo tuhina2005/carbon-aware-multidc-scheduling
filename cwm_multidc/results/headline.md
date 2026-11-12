@@ -2,21 +2,9 @@
 
 > Carbon intensity: Energy-Charts/ENTSO-E + CAISO 2024 (production-based life-cycle CI) historical hourly data, window starting 2024-04-17 UTC.
 
-## brown metric, ε = 0.02 kWh/GB: gain = 1 − Ours/other (total gCO₂)
+> ⚠ Produced with solver build `d849bc23fc71`, not the deployed `8a456bbb33a0`. pre-fix build: has the out-of-bounds read in mapper.cpp (results not bit-reproducible)
 
-| vs                                         |   n |   mean_gain_% |   median_gain_% |   max_gain_% |   share_gain>=5% |   n_infeasible |
-|:-------------------------------------------|----:|--------------:|----------------:|-------------:|-----------------:|---------------:|
-| B1: CWM-Local                              |  15 |        74.499 |          93.428 |       95.475 |            0.8   |              0 |
-| B2: Greenest-DC + HEFT                     |  16 |        52.425 |          53.874 |      100     |            1     |              0 |
-| B3: Greenest-DC + CWM                      |  16 |        19.082 |           0     |      100     |            0.25  |              0 |
-| B4: Network-Optimized                      |  16 |        28.905 |           0     |      100     |            0.438 |              0 |
-| B5: Compute-Optimized                      |  16 |        19.102 |           0     |      100     |            0.25  |              0 |
-| A1: Ours-NoWait (best DC, T_net = 0)       |  15 |         0     |           0     |        0     |            0     |              0 |
-| A2: Ours-FixedDC (greenest DC, best T_net) |  16 |        19.082 |           0     |      100     |            0.25  |              0 |
-| C1: B3-bestN (equal solver budget)         |  16 |        18.593 |          -0.274 |      100     |            0.25  |              0 |
-
-- Ours vs separable bound: median gap 0.0% (max 27.6%)
-- CWM non-monotonicity (Prop. 1 violations): 12.0% of consecutive arrival steps
+Primary metric: **location** (marginal, location-based compute carbon). The **brown** metric is CWM's native objective; it is zero for any DC whose green budget covers the job, whatever that grid's CI, so it can favour a dirtier grid and is reported as secondary.
 
 ## location metric, ε = 0.02 kWh/GB: gain = 1 − Ours/other (total gCO₂)
 
@@ -33,6 +21,43 @@
 
 - Ours vs separable bound: median gap 0.0% (max 12.0%)
 - CWM non-monotonicity (Prop. 1 violations): 15.3% of consecutive arrival steps
+
+## brown metric, ε = 0.02 kWh/GB: gain = 1 − Ours/other (total gCO₂)
+
+| vs                                         |   n |   mean_gain_% |   median_gain_% |   max_gain_% |   share_gain>=5% |   n_infeasible |
+|:-------------------------------------------|----:|--------------:|----------------:|-------------:|-----------------:|---------------:|
+| B1: CWM-Local                              |  15 |        74.499 |          93.428 |       95.475 |            0.8   |              0 |
+| B2: Greenest-DC + HEFT                     |  16 |        52.425 |          53.874 |      100     |            1     |              0 |
+| B3: Greenest-DC + CWM                      |  16 |        19.082 |           0     |      100     |            0.25  |              0 |
+| B4: Network-Optimized                      |  16 |        28.905 |           0     |      100     |            0.438 |              0 |
+| B5: Compute-Optimized                      |  16 |        19.102 |           0     |      100     |            0.25  |              0 |
+| A1: Ours-NoWait (best DC, T_net = 0)       |  15 |         0     |           0     |        0     |            0     |              0 |
+| A2: Ours-FixedDC (greenest DC, best T_net) |  16 |        19.082 |           0     |      100     |            0.25  |              0 |
+| C1: B3-bestN (equal solver budget)         |  16 |        18.593 |          -0.274 |      100     |            0.25  |              0 |
+
+- Ours vs separable bound: median gap 0.0% (max 27.6%)
+- CWM non-monotonicity (Prop. 1 violations): 12.0% of consecutive arrival steps
+
+## Per problem, location metric (total kgCO₂)
+
+|                                    |   Ours |     B1 |    B2 |    B3 |    B4 |    B5 |    A1 |    A2 |    C1 | Ours DC   |   Ours T_net (h) |
+|:-----------------------------------|-------:|-------:|------:|------:|------:|------:|------:|------:|------:|:----------|-----------------:|
+| ('atacseq200', 0, 1000.0, 1.5)     |   5.42 |  17.96 |  5.45 |  5.42 |  5.42 |  5.42 |  5.42 |  5.42 |  5.42 | PAR       |                0 |
+| ('atacseq200', 0, 1000.0, 2.0)     |   5.42 |  16.69 |  5.45 |  5.42 |  5.42 |  5.42 |  5.42 |  5.42 |  5.42 | PAR       |                0 |
+| ('atacseq200', 12, 1000.0, 1.5)    |   4.32 |  16.18 |  4.36 |  4.32 |  4.32 |  4.32 |  4.32 |  4.32 |  4.32 | OSL       |                0 |
+| ('atacseq200', 12, 1000.0, 2.0)    |   4.32 |  16.69 |  4.36 |  4.32 |  4.32 |  4.32 |  4.32 |  4.32 |  4.32 | OSL       |                0 |
+| ('chipseq1000', 0, 1000.0, 1.5)    |  11.36 | 107.14 | 13.01 | 11.36 | 11.36 | 11.36 | 11.36 | 11.36 | 11.31 | PAR       |                0 |
+| ('chipseq1000', 0, 1000.0, 2.0)    |  10.28 | 132.43 | 13.01 | 10.28 | 13.29 | 10.28 | 10.28 | 10.28 | 10.27 | PAR       |                0 |
+| ('chipseq1000', 12, 1000.0, 1.5)   |  10.55 | 145.9  | 12.93 | 10.55 | 10.55 | 10.55 | 10.55 | 10.55 | 10.52 | PAR       |                0 |
+| ('chipseq1000', 12, 1000.0, 2.0)   |   9.32 | 112.9  | 12.93 |  9.32 |  9.32 |  9.32 |  9.32 |  9.32 |  9.32 | PAR       |                0 |
+| ('eager1000', 0, 1000.0, 1.5)      |  11.22 |  97.21 | 12.57 | 11.22 | 11.22 | 11.22 | 11.22 | 11.22 | 11.18 | PAR       |                0 |
+| ('eager1000', 0, 1000.0, 2.0)      |   9.96 | 120.59 | 12.57 |  9.96 | 12.94 |  9.96 |  9.96 |  9.96 |  9.96 | PAR       |                0 |
+| ('eager1000', 12, 1000.0, 1.5)     |  10.4  | 129.33 | 12.54 | 10.4  | 10.4  | 10.4  | 10.4  | 10.4  | 10.37 | PAR       |                0 |
+| ('eager1000', 12, 1000.0, 2.0)     |   8.96 | 106.52 | 12.54 |  8.96 |  8.96 |  8.96 |  8.96 |  8.96 |  8.96 | PAR       |                0 |
+| ('methylseq1000', 0, 1000.0, 1.5)  |  11.4  | 114.58 | 13.22 | 11.4  | 11.4  | 11.4  | 11.4  | 11.4  | 11.37 | PAR       |                0 |
+| ('methylseq1000', 0, 1000.0, 2.0)  |  10.43 | 112.36 | 13.22 | 10.43 | 13.45 | 10.43 | 10.43 | 10.43 | 10.43 | PAR       |                0 |
+| ('methylseq1000', 12, 1000.0, 1.5) |  11.11 | 126.23 | 13.16 | 11.11 | 11.11 | 11.11 | 11.11 | 11.11 | 11.03 | PAR       |                0 |
+| ('methylseq1000', 12, 1000.0, 2.0) |   9.58 | 102.9  | 13.16 |  9.58 |  9.58 |  9.58 |  9.58 |  9.58 |  9.57 | PAR       |                0 |
 
 ## Per problem, brown metric (total kgCO₂)
 
@@ -55,11 +80,15 @@
 | ('methylseq1000', 12, 1000.0, 1.5) |   6.36 |  88.95 | 9.36 | 6.36 | 6.36 | 6.38 | 6.36 | 6.36 | 6.26 | PAR       |                0 |
 | ('methylseq1000', 12, 1000.0, 2.0) |   3.45 |  55.07 | 9.36 | 3.45 | 3.45 | 3.45 | 3.45 | 3.45 | 3.44 | PAR       |                0 |
 
-## ε_net sweep (brown metric, post hoc): gain of Ours over B3
+## ε_net sweep (post hoc): gain of Ours over B3
 
-|   eps_kwh_per_gb |   n |   mean_gain_% |   share_gain>=5% |
-|-----------------:|----:|--------------:|-----------------:|
-|            0.001 |  16 |         6.387 |            0.062 |
-|            0.005 |  16 |         9.566 |            0.125 |
-|            0.02  |  16 |        19.082 |            0.25  |
-|            0.06  |  16 |        23.027 |            0.25  |
+| metric   |   eps_kwh_per_gb |   n |   mean_gain_% |   share_gain>=5% |
+|:---------|-----------------:|----:|--------------:|-----------------:|
+| location |            0.001 |  16 |         0     |            0     |
+| location |            0.005 |  16 |         0     |            0     |
+| location |            0.02  |  16 |         0     |            0     |
+| location |            0.06  |  16 |         0.006 |            0     |
+| brown    |            0.001 |  16 |         6.387 |            0.062 |
+| brown    |            0.005 |  16 |         9.566 |            0.125 |
+| brown    |            0.02  |  16 |        19.082 |            0.25  |
+| brown    |            0.06  |  16 |        23.027 |            0.25  |

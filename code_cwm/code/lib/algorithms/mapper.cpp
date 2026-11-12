@@ -3,6 +3,7 @@
 #include <cassert>
 #include <numeric>
 #include <chrono>
+#include <limits>
 #include <cmath>
 #include <cstdint>
 
@@ -217,9 +218,16 @@ unsigned int CaWoMap::HEFT_compute_carbon_cost_fast() {
     unsigned int end = events[i+1];
     if (start >= original_interval_end) {
       current_interval_id++;
-      original_interval_end = _config.getIntervals()[++current_interval_iterator];
+      ++current_interval_iterator;
+      // Events can lie past the last interval point (the profile horizon); time there has no
+      // green budget.  Reading intervals/budgets past their end was undefined behaviour.
+      original_interval_end = current_interval_iterator < _config.getIntervals().size()
+                                  ? _config.getIntervals()[current_interval_iterator]
+                                  : std::numeric_limits<unsigned int>::max();
     }
-    refined_intervals[start] = {end, (unsigned int)i, _config.getBudgets()[current_interval_id]};
+    refined_intervals[start] = {end, (unsigned int)i,
+                                current_interval_id < _config.getBudgets().size()
+                                    ? _config.getBudgets()[current_interval_id] : 0u};
   }
 
   // Now we have the refined intervals
@@ -334,9 +342,16 @@ unsigned int CaWoMap::final_compute_carbon_cost_fast() {
     unsigned int end = events[i+1];
     if (start >= original_interval_end) {
       current_interval_id++;
-      original_interval_end = _config.getIntervals()[++current_interval_iterator];
+      ++current_interval_iterator;
+      // Events can lie past the last interval point (the profile horizon); time there has no
+      // green budget.  Reading intervals/budgets past their end was undefined behaviour.
+      original_interval_end = current_interval_iterator < _config.getIntervals().size()
+                                  ? _config.getIntervals()[current_interval_iterator]
+                                  : std::numeric_limits<unsigned int>::max();
     }
-    refined_intervals[start] = {end, (unsigned int)i, _config.getBudgets()[current_interval_id]};
+    refined_intervals[start] = {end, (unsigned int)i,
+                                current_interval_id < _config.getBudgets().size()
+                                    ? _config.getBudgets()[current_interval_id] : 0u};
   }
 
   // Now we have the refined intervals
@@ -467,9 +482,16 @@ std::vector<unsigned long long> CaWoMap::carbon_cost_per_interval(
     unsigned int end = events[i+1];
     if (start >= original_interval_end) {
       current_interval_id++;
-      original_interval_end = _config.getIntervals()[++current_interval_iterator];
+      ++current_interval_iterator;
+      // Events can lie past the last interval point (the profile horizon); time there has no
+      // green budget.  Reading intervals/budgets past their end was undefined behaviour.
+      original_interval_end = current_interval_iterator < _config.getIntervals().size()
+                                  ? _config.getIntervals()[current_interval_iterator]
+                                  : std::numeric_limits<unsigned int>::max();
     }
-    refined_intervals[start] = {end, (unsigned int)i, _config.getBudgets()[current_interval_id]};
+    refined_intervals[start] = {end, (unsigned int)i,
+                                current_interval_id < _config.getBudgets().size()
+                                    ? _config.getBudgets()[current_interval_id] : 0u};
     original_id_of_refined.push_back(current_interval_id);
   }
 
@@ -590,9 +612,16 @@ unsigned int CaWoMap::CWM_compute_carbon_cost_fast() {
     unsigned int end = events[i+1];
     if (start >= original_interval_end) {
       current_interval_id++;
-      original_interval_end = _config.getIntervals()[++current_interval_iterator];
+      ++current_interval_iterator;
+      // Events can lie past the last interval point (the profile horizon); time there has no
+      // green budget.  Reading intervals/budgets past their end was undefined behaviour.
+      original_interval_end = current_interval_iterator < _config.getIntervals().size()
+                                  ? _config.getIntervals()[current_interval_iterator]
+                                  : std::numeric_limits<unsigned int>::max();
     }
-    refined_intervals[start] = {end, (unsigned int)i, _config.getBudgets()[current_interval_id]};
+    refined_intervals[start] = {end, (unsigned int)i,
+                                current_interval_id < _config.getBudgets().size()
+                                    ? _config.getBudgets()[current_interval_id] : 0u};
   }
 
   // Now we have the refined intervals
@@ -887,9 +916,16 @@ bool CaWoMap::local_search_final(unsigned int deadline) {
     unsigned int end = events[i+1];
     if (start >= original_interval_end) {
       current_interval_id++;
-      original_interval_end = _config.getIntervals()[++current_interval_iterator];
+      ++current_interval_iterator;
+      // Events can lie past the last interval point (the profile horizon); time there has no
+      // green budget.  Reading intervals/budgets past their end was undefined behaviour.
+      original_interval_end = current_interval_iterator < _config.getIntervals().size()
+                                  ? _config.getIntervals()[current_interval_iterator]
+                                  : std::numeric_limits<unsigned int>::max();
     }
-    refined_intervals[start] = {end, (unsigned int)i, _config.getBudgets()[current_interval_id]};
+    refined_intervals[start] = {end, (unsigned int)i,
+                                current_interval_id < _config.getBudgets().size()
+                                    ? _config.getBudgets()[current_interval_id] : 0u};
   }
 
   // Now we have the refined intervals
@@ -1140,9 +1176,16 @@ bool CaWoMap::local_search(unsigned int deadline) {
     unsigned int end = events[i+1];
     if (start >= original_interval_end) {
       current_interval_id++;
-      original_interval_end = _config.getIntervals()[++current_interval_iterator];
+      ++current_interval_iterator;
+      // Events can lie past the last interval point (the profile horizon); time there has no
+      // green budget.  Reading intervals/budgets past their end was undefined behaviour.
+      original_interval_end = current_interval_iterator < _config.getIntervals().size()
+                                  ? _config.getIntervals()[current_interval_iterator]
+                                  : std::numeric_limits<unsigned int>::max();
     }
-    refined_intervals[start] = {end, (unsigned int)i, _config.getBudgets()[current_interval_id]};
+    refined_intervals[start] = {end, (unsigned int)i,
+                                current_interval_id < _config.getBudgets().size()
+                                    ? _config.getBudgets()[current_interval_id] : 0u};
   }
 
   // Now we have the refined intervals

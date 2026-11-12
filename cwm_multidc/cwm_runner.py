@@ -127,6 +127,14 @@ def parse_solver_output(stdout: str, expect_per_interval: bool, n_intervals: int
     return elapsed_ms, makespan, carbon, per, energy
 
 
+def file_sha256(path: str | os.PathLike[str]) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 class ResultCache:
     """Thread-safe append-only JSONL cache of solver results keyed by input hash."""
 
@@ -194,6 +202,7 @@ class CWMRunner:
         for p in (self.cluster_json, self.solve_bin):
             if not p.exists():
                 raise CWMRunnerError(f"required file not found: {p}")
+        self.solver_sha256 = file_sha256(self.solve_bin)
 
     # ------------------------------------------------------------------ helpers
     def _key(self, dag: Path, profile: Mapping[str, Any], deadline: int, seed: int, scheduler: str) -> str:
@@ -209,6 +218,9 @@ class CWMRunner:
                 "seed": seed,
                 "scheduler": scheduler,
                 "output_format": 2,  # 2 = excess + total energy per interval
+                # results from another solver build must never be reused (e.g. the pre-fix binary
+                # with the out-of-bounds read in mapper.cpp)
+                "solver_sha256": self.solver_sha256,
             },
             sort_keys=True,
         ).encode())

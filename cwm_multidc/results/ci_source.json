@@ -30,5 +30,7 @@
     "FR": "cwm_multidc/data/public_ci/FR.csv",
     "PL": "cwm_multidc/data/public_ci/PL.csv",
     "US-CAL": "cwm_multidc/data/public_ci/US-CAL.csv"
-  }
+  },
+  "solver_sha256": "d849bc23fc7153f656ca6e8cc13183cc465dbafe8e7dfacfabc821167a35f00a",
+  "solver_note": "pre-fix build: has the out-of-bounds read in mapper.cpp (results not bit-reproducible)"
 }
