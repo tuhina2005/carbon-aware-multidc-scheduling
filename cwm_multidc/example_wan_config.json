@@ -1,0 +1,41 @@
+{
+  "_comment": "Example synthetic WAN configuration for CWM multi-data-centre scheduling. Parameters are synthetic hypotheses for research simulations, not empirical telemetry.",
+  "wan_links": {
+    "default": {
+      "bandwidth_gbps": 1.0,
+      "energy_intensity_kwh_per_gb": 0.02,
+      "throughput_efficiency": 0.95,
+      "unit_convention": "decimal",
+      "integer_arrival_policy": "ceil"
+    },
+    "high_speed": {
+      "bandwidth_gbps": 10.0,
+      "energy_intensity_kwh_per_gb": 0.005,
+      "throughput_efficiency": 0.92,
+      "unit_convention": "decimal",
+      "integer_arrival_policy": "ceil"
+    }
+  },
+  "candidate_data_centres": {
+    "DC_Frankfurt": {
+      "region": "Germany",
+      "average_carbon_intensity_gco2_per_kwh": 350.0,
+      "is_source": true
+    },
+    "DC_Oslo": {
+      "region": "Norway",
+      "average_carbon_intensity_gco2_per_kwh": 40.0,
+      "is_source": false
+    },
+    "DC_Paris": {
+      "region": "France",
+      "average_carbon_intensity_gco2_per_kwh": 60.0,
+      "is_source": false
+    },
+    "DC_Warsaw": {
+      "region": "Poland",
+      "average_carbon_intensity_gco2_per_kwh": 650.0,
+      "is_source": false
+    }
+  }
+}

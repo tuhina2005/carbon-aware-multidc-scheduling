@@ -418,6 +418,145 @@ unsigned int CaWoMap::final_compute_carbon_cost_fast() {
   return total_carbon;
 }
 
+std::vector<unsigned long long> CaWoMap::final_carbon_cost_per_interval(std::vector<unsigned long long>* energy_out) {
+  return carbon_cost_per_interval(final_start_and_end_times, final_processor_of_task, final_schedule, energy_out);
+}
+
+std::vector<unsigned long long> CaWoMap::HEFT_carbon_cost_per_interval(std::vector<unsigned long long>* energy_out) {
+  return carbon_cost_per_interval(heft_start_and_end_times, heft_processor_of_task, HEFT_schedule, energy_out);
+}
+
+// Same sweep as final_compute_carbon_cost_fast(), but attributes excess energy to the
+// original profile interval and accumulates in 64 bit.
+std::vector<unsigned long long> CaWoMap::carbon_cost_per_interval(
+    const std::vector<std::pair<unsigned int, unsigned int>>& times,
+    const std::vector<unsigned int>& procs,
+    const Schedule& sched,
+    std::vector<unsigned long long>* energy_out) {
+  std::vector<unsigned long long> per_interval(_config.getBudgets().size(), 0ULL);
+  if (energy_out) energy_out->assign(_config.getBudgets().size(), 0ULL);
+  std::vector<unsigned int> original_id_of_refined;
+
+  std::vector<unsigned int> events;
+  events.reserve((G.getNumNodes() * 2 + _config.getIntervals().size()));
+  for (const auto& point : _config.getIntervals()) {
+    events.push_back(point);
+  }
+  
+  // sweep line over every task
+  for (const auto& [start, end] : times) {
+    events.push_back(start); events.push_back(end);
+  }
+
+  // sweep line over every communication
+  for (const auto& [msg_id, details] : sched.messages) {
+    events.push_back(details.start_time);
+    events.push_back(details.end_time);
+  }
+
+  std::sort(events.begin(), events.end());
+  events.erase(std::unique(events.begin(), events.end()), events.end());
+  // store intervals in map
+  unsigned int current_interval_id = 0;
+  size_t current_interval_iterator = 1;
+  unsigned int original_interval_end = _config.getIntervals()[current_interval_iterator];
+  // this works because we do not skip intervals because the interval points are events, too
+  std::map<unsigned int, EndpointWithBudget> refined_intervals;
+  for (size_t i = 0; i < events.size() - 1; ++i) {
+    unsigned int start = events[i];
+    unsigned int end = events[i+1];
+    if (start >= original_interval_end) {
+      current_interval_id++;
+      original_interval_end = _config.getIntervals()[++current_interval_iterator];
+    }
+    refined_intervals[start] = {end, (unsigned int)i, _config.getBudgets()[current_interval_id]};
+    original_id_of_refined.push_back(current_interval_id);
+  }
+
+  // Now we have the refined intervals
+  unsigned int bit_vector_size_comp = _config.getNumProcessors();
+  std::vector<std::vector<bool>> processor_usage(events.size()-1, std::vector<bool>(bit_vector_size_comp, false));
+
+  unsigned int bit_vector_size_comm = _config.getNumProcessors() * _config.getNumProcessors();
+  std::vector<std::vector<bool>> communication_usage(events.size()-1, std::vector<bool>(bit_vector_size_comm, false));
+
+  // mark processor usage
+  for (unsigned int task = 0; task < G.getNumNodes(); ++task) {
+    unsigned int proc = procs[task];
+    unsigned int start = times[task].first;
+    auto it = refined_intervals.upper_bound(start);
+    unsigned int interval_id = 0;
+    if (it != refined_intervals.begin()) {
+      --it;
+      interval_id = it->second.interval_id;
+      processor_usage[interval_id][proc] = true;
+    }
+    ++it; 
+    while (it != refined_intervals.end() && it->first < times[task].second) {
+      processor_usage[it->second.interval_id][proc] = true;
+      ++it;
+    }
+  }
+
+  // mark communication usage
+  for (const auto& [msg_id, details] : sched.messages) {
+    unsigned int link_id = details.link_id;
+    unsigned int start = details.start_time;
+    auto it = refined_intervals.upper_bound(start);
+    unsigned int interval_id = 0;
+    if (it != refined_intervals.begin()) {
+      --it;
+      interval_id = it->second.interval_id;
+      communication_usage[interval_id][link_id] = true;
+    }
+    ++it; 
+    while (it != refined_intervals.end() && it->first < details.end_time) {
+      communication_usage[it->second.interval_id][link_id] = true;
+      ++it;
+    }
+  }
+
+  // now compute the carbon cost per refined interval
+  // first we have to assign the link a power value, we have P(P-1) of them but created P^2 links.
+  auto power_id = [this](unsigned int link_id) {
+    unsigned int src = link_id % _config.getNumProcessors();
+    unsigned int tgt = link_id / _config.getNumProcessors();
+    if (src < tgt) {
+      return src * (_config.getNumProcessors() - 1) + tgt - 1;
+    } else {
+      return src * (_config.getNumProcessors() - 1) + tgt;
+    }
+  };
+
+  for (const auto& [start, endpoint] : refined_intervals) {
+    unsigned int power = _config.getBasePower();
+    for (size_t p = 0; p < _config.getNumProcessors(); ++p) {
+      if (processor_usage[endpoint.interval_id][p]) {
+        power += _config.getPWork()[p];
+      } 
+    }
+
+    for (size_t l = 0; l < _config.getNumProcessors() * _config.getNumProcessors(); ++l) {
+      if (communication_usage[endpoint.interval_id][l]) {
+        unsigned int pid = power_id(l);
+        power += _config.getPWorkComm()[pid];
+      }
+    }
+
+    if (energy_out) {
+      (*energy_out)[original_id_of_refined[endpoint.interval_id]] +=
+          static_cast<unsigned long long>(power) * (endpoint.interval_end - start);
+    }
+    if (power > endpoint.budget) {
+      unsigned long long duration = endpoint.interval_end - start;
+      per_interval[original_id_of_refined[endpoint.interval_id]] +=
+          static_cast<unsigned long long>(power - endpoint.budget) * duration;
+    }
+  }
+
+  return per_interval;
+}
+
 unsigned int CaWoMap::CWM_compute_carbon_cost_fast() {
   unsigned int total_carbon = 0;
 

@@ -50,9 +50,10 @@ No existing paper models the shared-deadline tension between carbon-aware data m
 
 ### 3.2 Parameters
 - $G = (V, E, \omega, c)$: DAG workflow. $\omega(v)$ = computational work, $c(v_i, v_j)$ = inter-task data.
-- $\Delta$: Input data volume (**must be massive, e.g., 1–10 TB**, otherwise network carbon is negligible).
+- $\Delta$: Input data volume. Moving data is only possible if $\Delta \le B_{\text{eff}}\,(D - M)$, and the benefit of *delaying* the transfer shrinks as $\tau = \Delta/B_{\text{eff}}$ approaches the 24 h period of the CI signal (Prop. 3). At 1 Gbps the interesting range is about 0.1–3 TB; 10 TB (23.4 h) is generally infeasible to move within the deadline.
 - $D$: Global end-to-end deadline.
-- $B_d$: WAN bandwidth from $d_s$ to DC $d$ (fixed parameter, default **1 Gbps**).
+- $B_d$: nominal WAN bandwidth from $d_s$ to DC $d$ (fixed parameter, default **1 Gbps**); effective rate $B_{\text{eff}} = \eta B_d$ with $\eta = 0.95$.
+- $\kappa$: seconds per CWM time unit (default 120 s, i.e. 30 units = 1 h = one CI interval). Compute energy scales linearly with $\kappa$ while network energy does not, so $\kappa$ is a sensitivity parameter, not a constant of nature.
 - $\mathcal{G}_{d,j}$: Green power budget at DC $d$ during interval $I_j$ (CWM's native format).
 - $\text{CI}_{d,j}$: Carbon intensity at DC $d$ during interval $I_j$ (gCO₂/kWh). Used for unit conversion.
 - $\epsilon_{\text{net}}$: Network energy intensity (kWh/GB, e.g., 0.02).
@@ -60,24 +61,31 @@ No existing paper models the shared-deadline tension between carbon-aware data m
 
 ### 3.3 Decision Variables
 1. $d \in \mathcal{D}$: Execution DC (discrete, enumerated).
-2. $T_{\text{net}} \in [0, T_{\text{net}}^{\max}(d)]$: Transfer start time (discretized, e.g., 15-min grid).
+2. $T_{\text{net}} \in [0, T_{\text{net}}^{\max}(d)]$: Transfer start time (continuous; searched on the breakpoint set of Prop. 2).
 3. $\mu(v), \sigma(v)$: Task-to-processor mapping and start times (CWM's internal variables).
 
 ### 3.4 Derived Quantities
-- $T_{\text{arrival}}(d, T_{\text{net}}) = T_{\text{net}} + \Delta / B_d$ (0 if $d = d_s$).
+- $\tau_d = \Delta / B_{\text{eff}}$ (0 if $d = d_s$).
+- $T_{\text{arrival}}(d, T_{\text{net}}) = \lceil (T_{\text{net}} + \tau_d)/\kappa \rceil$ CWM units (rounded up: compute never starts before the data has arrived).
 - $D'(d, T_{\text{net}}) = D - T_{\text{arrival}}$: Effective deadline for CWM.
-- $T_{\text{net}}^{\max}(d) = D - \Delta/B_d - M_{\min}(d)$: Upper bound on transfer start time. $M_{\min}(d)$ = critical path length on DC $d$'s fastest processors.
+- $M$ = HEFT makespan of the DAG on DC $d$'s cluster (the CWM paper's reference makespan; deadlines are $D = \lceil\alpha M\rceil$). The critical path is *not* used: CWM essentially never schedules below HEFT's makespan.
+- $T_{\text{net}}^{\max}(d) = \kappa (D - M) - \tau_d$: latest start that leaves $D' \ge M$.
 
 ### 3.5 Objective
 $$\min_{d, T_{\text{net}}} \left[ \text{NetCarbon}(d, T_{\text{net}}) + \text{CompCarbon}(d, T_{\text{net}}) \right]$$
 
-**Network Carbon:**
-$$\text{NetCarbon} = \epsilon_{\text{net}} \cdot B_d \cdot \sum_{j \in \text{covered}} \text{CI}^{\text{net}}_{s,d,j} \cdot \text{overlap}(I_j, [T_{\text{net}}, T_{\text{net}} + \Delta/B_d])$$
+**Network Carbon** (gCO₂):
+$$\text{NetCarbon} = \epsilon_{\text{net}}\,\Delta \cdot \frac{1}{\tau_d}\int_{T_{\text{net}}}^{T_{\text{net}}+\tau_d} \text{CI}^{\text{net}}_{s,d}(t)\,dt
+= \epsilon_{\text{net}} \cdot \hat B \cdot \sum_{j} \text{CI}^{\text{net}}_{s,d,j} \cdot \text{overlap}(I_j, [T_{\text{net}}, T_{\text{net}} + \tau_d))$$
+with $\hat B = B_{\text{eff}}/8$ in **GB/s** (the earlier version multiplied by $B_d$ in Gbit/s, which is off by a factor of 8). Units: kWh/GB · GB/s · gCO₂/kWh · s = gCO₂.
 
-**Compute Carbon:**
-CWM returns excess energy per interval $\{E_j^{\text{excess}}\}$. Convert to gCO₂:
-$$\text{CompCarbon} = \sum_{j} E_j^{\text{excess}} \cdot \text{CI}_{d, j+j^*}$$
-where $j^*$ is the interval offset from the profile shift.
+**Compute Carbon.** `solve_cwm --per-interval` returns, per interval of the shifted and truncated profile, the excess energy $E_j^{\text{exc}}$ and the total energy $E_j^{\text{tot}}$ (W × units). With $k(\cdot) = \kappa/3.6\times10^{6}$ converting W·unit to kWh:
+- *Brown* (CWM's own objective, primary): $\text{CompCarbon}^{\text{brown}} = \sum_j k(E_j^{\text{exc}})\,\text{CI}_{d,j^*+j}$.
+- *Marginal location-based* (secondary): $\text{CompCarbon}^{\text{loc}} = \sum_j k(E_j^{\text{tot}} - P_{\text{idle}}|I_j|)\,\text{CI}_{d,j^*+j}$.
+
+Caveat: the green budget is itself derived from CI, so the brown metric weights CI roughly quadratically, and it is zero for any DC that stays under budget whatever its grid CI. It measures "brown energy beyond a notional green allocation, priced at grid-average CI", not physical emissions. The location-based metric is reported alongside it for that reason.
+
+**Budget mapping** (identical for all DCs): $\mathcal{G}_{d,j} = P_{\text{idle}} + \max(0, 1 - \text{CI}_{d,j}/800)\cdot f\cdot P_{\text{dyn}}$, with $f = 0.2$ (small) / $0.4$ (large). The floor $\mathcal{G} \ge P_{\text{idle}}$ is what makes Prop. 1 hold.
 
 ### 3.6 Constraints
 1. $T_{\text{arrival}} \leq D - M_{\min}(d)$ (feasibility check).
@@ -90,7 +98,28 @@ CWM assumes time starts at $t=0$. When the DAG starts at $T_{\text{arrival}}$, t
 1. Find interval $j^*$ containing $T_{\text{arrival}}$.
 2. First CWM interval = remainder of $j^*$ with duration $e_{j^*} - T_{\text{arrival}}$ and budget $\mathcal{G}_{d,j^*}$.
 3. Subsequent CWM intervals = $j^*+1, j^*+2, \ldots$
-4. Truncate when cumulative duration reaches $D'$.
+4. Truncate when cumulative duration reaches $D'$ (`truncate_profile`). CWM integrates cost over the *whole* profile, idle power included, so without truncation the cost would depend on the leftover horizon.
+5. The CI profile is shifted and truncated with the same operations, so the per-interval CI stays aligned with CWM's per-interval energy by construction.
+
+### 3.8 Formal Properties
+
+Let $C^*_d(a)$ be the *optimal* compute carbon for arrival unit $a$, and $f_d(T) = \text{NetCarbon}_d(T) + C^*_d(T_{\text{arrival}}(T))$.
+
+**Assumption A (idle covered).** $\mathcal{G}_{d,j} \ge P_{\text{idle}}$ for all $d, j$ (guaranteed by the budget mapping).
+
+**Proposition 1 (monotone compute).** Under A, $C^*_d(a)$ is non-decreasing in $a$.
+*Proof.* A schedule feasible for arrival $a_2$ (all tasks in $[a_2, D)$) is feasible for $a_1 \le a_2$, since the absolute end $D$ is the same. Under A, idle power never exceeds the budget, so a schedule's brown energy depends only on its busy periods, not on the window $[a, D)$. Hence the feasible set only shrinks and the cost of each schedule is unchanged. ∎
+This is the formal content of the *deadline tension*: waiting can lower NetCarbon but can never lower $C^*$. **The CWM heuristic violates Prop. 1 empirically** (compute carbon drops in about 19% of consecutive arrival steps on our grid). Comparisons must therefore control for best-of-N selection over heuristic noise (baseline C1).
+
+**Proposition 2 (network breakpoints).** $\frac{d}{dT}\text{NetCarbon}_d(T) = \frac{\epsilon\Delta}{\tau_d}\big(\text{CI}^{\text{net}}(T+\tau_d) - \text{CI}^{\text{net}}(T)\big)$ is piecewise constant for piecewise-constant hourly CI. So NetCarbon is piecewise linear, and its minimum over $[0, T^{\max}]$ lies in $\{0, T^{\max}\} \cup \{kh\} \cup \{kh - \tau_d\}$. Note that the start time need not lie on a CI boundary: either the start or the arrival does, or it is an endpoint. This holds for NetCarbon only; the total has no such guarantee.
+
+**Proposition 3 (attenuation of temporal network shifting).** For $\text{CI}^{\text{net}}(t) = \bar c + A\cos(\omega t)$ with $\omega = 2\pi/P$, $P = 24$ h,
+$$\text{NetCarbon}(T) = \epsilon\Delta\Big[\bar c + A\,\mathrm{sinc}\big(\tfrac{\omega\tau}{2}\big)\cos\big(\omega(T + \tfrac{\tau}{2})\big)\Big],\quad \mathrm{sinc}(x) = \tfrac{\sin x}{x}.$$
+The most that waiting can save is $2\epsilon\Delta A|\mathrm{sinc}(\pi\tau/P)|$. This is zero at $\tau = P$, and waiting is feasible only if $\tau \le \kappa(D-M)$. The gain therefore peaks at intermediate data volumes and vanishes for very large ones. Synthetic DE↔NO data: the maximum saving from waiting falls from 32% (τ = 0.25 h) to 29% (2.3 h), 9.5% (8 h) and 3.4% (23.4 h).
+
+**Proposition 4 (existence).** The feasible set $[0, T^{\max}]$ is compact and non-empty iff $\tau_d \le \kappa(D - M)$. NetCarbon is continuous. $T_{\text{arrival}}(T)$ uses a ceiling, which is left-continuous and lower semicontinuous, and $C^*$ is non-decreasing, so $f_d$ is lower semicontinuous and attains its minimum.
+
+**Complexity.** The problem contains CWM ($d = d_s$, $\Delta = 0$) and is therefore strongly NP-hard.
 
 ---
 
@@ -102,20 +131,20 @@ CWM assumes time starts at $t=0$. When the DAG starts at $T_{\text{arrival}}$, t
 best_carbon ← ∞
 
 For each candidate DC d ∈ D:
-  Precompute M_min(d)
+  Precompute M_HEFT(d)   (HEFT makespan; deadline D = ceil(α·M_HEFT))
   If d = d_s: evaluate only T_net = 0
   
-  For each T_net in {0, Δt, 2Δt, ...} up to T_net_max(d):
-    T_arrival = T_net + Δ/B_d  (or 0 if d = d_s)
+  For each T_net in {0, T_max} ∪ {k·h} ∪ {k·h − τ_d} within [0, T_net_max(d)]   (Prop. 2):
+    T_arrival = ceil((T_net + τ_d)/κ)  (or 0 if d = d_s)
     D' = D - T_arrival
-    If D' < M_min(d): skip
+    If D' < M_HEFT: skip
     
-    shifted_profile = shift_profile(G_d, T_arrival)
+    shifted_profile = truncate(shift_profile(G_d, T_arrival), D')
     
     NetC = compute_network_carbon(T_net, Δ, B_d, CI_net_sd)
     
     CWM_result = call_CWM_binary(DAG, processors(d), shifted_profile, D')
-    CompC = convert_to_gCO2(CWM_result, CI_d, T_arrival)
+    CompC = Σ_j kWh(E_j) · CI_{d, j*+j}       (per-interval, both metrics)
     
     total = NetC + CompC
     If total < best_carbon:
@@ -125,10 +154,10 @@ For each candidate DC d ∈ D:
 Return best_solution
 ```
 
-**Properties:**
-- Exact enumeration of outer variables $(d, T_{\text{net}})$. No solution quality lost from decomposition.
-- Heuristic for inner variables $(\mu, \sigma)$ via CWM. Overall algorithm is a heuristic.
-- Complexity: $O(|\mathcal{D}| \cdot N_T \cdot \text{CWM\_time})$. For 10 DCs × 96 time slots × 0.1s per CWM call ≈ **96 seconds total**.
+**Properties (corrected):**
+- The outer enumeration is exact **only for NetCarbon** (Prop. 2): the breakpoint set contains its minimiser. It is *not* exact for the total. $T_{\text{net}}$ is continuous and $C_d(\cdot)$ is a heuristic, non-monotone black box, so no optimality guarantee holds.
+- The inner variables $(\mu, \sigma)$ are solved heuristically by CWM; the overall algorithm is a heuristic.
+- Complexity: $O(|\mathcal{D}| \cdot N_T \cdot |\text{seeds}| \cdot t_{\text{CWM}})$. **Measured** $t_{\text{CWM}}$ is 1.1 s (atacseq200), 8 s (eager1000) and 33 s (methylseq4000), not 0.1 s. Evaluations are cached and run in parallel (8 workers). In practice $N_T$ is 2–35 per DC.
 
 ---
 
@@ -177,10 +206,16 @@ Return best_solution
 | B2 | Greenest-DC + HEFT | Pick DC with lowest avg CI, transfer immediately, run HEFT (no temporal optimization). |
 | B3 | Greenest-DC + CWM | Pick DC with lowest avg CI, transfer immediately, run CWM. |
 | B4 | Network-Optimized | Pick transfer time that minimizes network carbon, ignoring compute impact. |
-| B5 | Compute-Optimized | Transfer immediately (maximize CWM deadline flexibility). |
+| B5 | Compute-Optimized | Transfer immediately to every DC; pick the DC with least compute carbon (ignores network). |
 | **Ours** | Joint Spatiotemporal | Full grid search over (DC, transfer time) with CWM. |
+| A1 | Ours-NoWait | $T_{\text{net}} = 0$, DC chosen by total carbon: isolates *spatial* choice. |
+| A2 | Ours-FixedDC | Greenest DC, $T_{\text{net}}$ chosen by total carbon: isolates *temporal network shifting*. |
+| C1 | B3-bestN | B3's configuration with as many independent seed groups as Ours makes CWM calls (equal solver budget). Separates real joint gains from best-of-N selection over heuristic noise. |
+| LB | Separable bound | $\min_d[\min_T \text{Net}_d + \min_T \text{Comp}_d]$ over evaluated points: a lower bound on Ours. The gap Ours − LB measures the trade-off that cannot be realised simultaneously. |
 
-**Critical experiment:** Ours vs B3. If we don't beat "Greenest-DC + CWM" by ≥5-10%, the contribution is weak.
+A1/A2 against B3/Ours form the 2×2 factorial over {DC by mean CI, DC by total} × {transfer now, transfer at the best time}. B2 isolates CWM's own contribution (the base paper's, not ours).
+
+**Critical experiment:** Ours vs B3 **and** vs C1. Ties with B1/B3 are *predicted* in identifiable regimes (§10) and are reported as a phase diagram, not hidden.
 
 ---
 
@@ -195,14 +230,27 @@ Return best_solution
 
 ## 10. KNOWN RISKS
 
-1. **Network carbon may be too small.** If $\Delta < 100$ GB, network carbon is <1% of total. Must use TB-scale data.
-2. **"Greenest-DC + CWM" might be near-optimal.** Bashir et al. (2024) showed simple policies often suffice. Must demonstrate ≥5-10% improvement.
+1. **The ratio of network to compute carbon is set by parameters** ($\kappa$, $\epsilon_{\text{net}}$, $B$), not measured: report sensitivity sweeps over all three. Large $\Delta$ is *not* automatically better (Prop. 3).
+2. **"Greenest-DC + CWM" is near-optimal by construction when the greenest DC is also the greenest network path.** This is almost automatic under endpoint-averaged WAN CI. Expected ties:
+   - Ours = B1 when compute at the source stays under budget, when $\tau > \kappa(D-M)$, or when moving the data costs more than it saves.
+   - Ours = B3 when the greenest DC is also the greenest network path and the compute penalty of waiting (Prop. 1) exceeds the sinc-limited network saving (Prop. 3).
 3. **CWM C++ compilation.** Getting the original binary to compile and wrapping it via Python subprocess is the main engineering risk.
 4. **Profile shift bugs.** The function that shifts CWM's green power profile by $T_{\text{arrival}}$ is the most critical piece of code. If wrong, all results are wrong.
 
 ---
 
-## 11. IMPLEMENTATION STACK
+## 11. MODELLING ASSUMPTIONS (phrasing for the paper)
+
+1. *Attributional network energy.* "We attribute WAN energy per transferred GB (ε_net), consistent with attributional carbon accounting. Most network energy is load-independent, so under marginal accounting temporal network shifting yields little benefit; our network-side gains are an upper bound." ε_net is swept over 0.001–0.06 kWh/GB.
+2. *Asymmetric accounting.* Compute is charged marginally (idle power is covered by the budget floor) and network attributionally. We state this explicitly and report the location-based compute metric alongside.
+3. *Endpoint-average WAN CI.* A modelling proxy that ignores routing and the CI of transit countries.
+4. *Bulk, dedicated transfer.* Constant bandwidth, no contention, no TCP dynamics, input transferred entirely before compute starts (no per-task streaming, which would weaken the tension), and no return of output data.
+5. *Identical clusters and a single workflow per DC.* This isolates the carbon signal; heterogeneity and background load are future work.
+6. *CI foresight.* Decisions use CI forecasts; we evaluate decisions taken on noisy forecasts (multiplicative AR(1), σ ∈ {0.1, 0.25, 0.5}) against realised CI.
+7. *Time scale κ.* Calibrated so one CWM interval (mean length 30 units in the CWM instances) equals one hour; swept over κ ∈ {60, 120, 240} s.
+8. *Data.* Results with synthetic CI are for development only; final results require Electricity Maps hourly data (supported via `build_topology(ci_csv=...)`).
+
+## 12. IMPLEMENTATION STACK
 
 - **Language:** Python (outer loop) + CWM C++ binary (inner solver).
 - **Interface:** Python generates input files → calls CWM via `subprocess` → parses output.

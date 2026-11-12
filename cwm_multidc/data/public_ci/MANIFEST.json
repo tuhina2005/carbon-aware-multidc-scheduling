@@ -1,0 +1,161 @@
+{
+  "label": "Energy-Charts/ENTSO-E + CAISO 2024 (production-based life-cycle CI)",
+  "year": 2024,
+  "retrieved_utc": "2026-11-12T03:54:19Z",
+  "method": "CI_h = sum_f G_fh EF_f / sum_f G_fh; storage, imports and load excluded",
+  "emission_factors_gco2_per_kwh": {
+    "coal": 820,
+    "gas": 490,
+    "oil": 650,
+    "biomass": 230,
+    "nuclear": 12,
+    "hydro": 24,
+    "wind": 11,
+    "solar": 45,
+    "geothermal": 38,
+    "unknown": 700
+  },
+  "factor_source": "IPCC AR5 WG3 Annex III life-cycle medians; oil and unknown per Electricity Maps defaults",
+  "sources": {
+    "energy-charts": "https://api.energy-charts.info (Fraunhofer ISE, ENTSO-E data, CC BY 4.0)",
+    "caiso": "https://www.caiso.com/outlook/history/<YYYYMMDD>/fuelsource.csv"
+  },
+  "not_covered": {
+    "IN": "no free hourly fuel-mix source for the Western Indian grid; DC_Mumbai is dropped"
+  },
+  "regions": {
+    "DE": {
+      "source": "energy-charts",
+      "zone": "energy-charts:de",
+      "file": "DE.csv",
+      "rows": 8784,
+      "mean_gco2_per_kwh": 319.7,
+      "generation_weighted_gco2_per_kwh": 304.8,
+      "min": 106.62,
+      "max": 603.86,
+      "fuel_share": {
+        "biomass": 0.0898,
+        "coal": 0.2412,
+        "gas": 0.1057,
+        "geothermal": 0.0004,
+        "hydro": 0.054,
+        "oil": 0.0079,
+        "solar": 0.1448,
+        "unknown": 0.0257,
+        "wind": 0.3306
+      },
+      "interpolated_hours_utc": [],
+      "sha256": "8bd6b5eaa324412a5657cab416368f0938253d6b05e417ccc2ec62e7c633df7c",
+      "unmapped_types_as_unknown": []
+    },
+    "FR": {
+      "source": "energy-charts",
+      "zone": "energy-charts:fr",
+      "file": "FR.csv",
+      "rows": 8784,
+      "mean_gco2_per_kwh": 36.1,
+      "generation_weighted_gco2_per_kwh": 37.2,
+      "min": 19.41,
+      "max": 96.71,
+      "fuel_share": {
+        "biomass": 0.006,
+        "coal": 0.0012,
+        "gas": 0.0333,
+        "hydro": 0.1226,
+        "nuclear": 0.6968,
+        "oil": 0.0027,
+        "solar": 0.0451,
+        "unknown": 0.0036,
+        "wind": 0.0887
+      },
+      "interpolated_hours_utc": [],
+      "sha256": "a7ca9a36c160df7c284fb7dc9f74b887fd031360b64c1b4aa7611a69998802fe",
+      "unmapped_types_as_unknown": []
+    },
+    "PL": {
+      "source": "energy-charts",
+      "zone": "energy-charts:pl",
+      "file": "PL.csv",
+      "rows": 8784,
+      "mean_gco2_per_kwh": 560.3,
+      "generation_weighted_gco2_per_kwh": 553.7,
+      "min": 269.32,
+      "max": 757.62,
+      "fuel_share": {
+        "biomass": 0.0167,
+        "coal": 0.5725,
+        "gas": 0.106,
+        "hydro": 0.0118,
+        "oil": 0.013,
+        "solar": 0.1101,
+        "unknown": 0.0187,
+        "wind": 0.1512
+      },
+      "interpolated_hours_utc": [],
+      "sha256": "7b4cb6f19330195e75220db0d321f64cb916c84ee28a72aaa405bdd77e2046ad",
+      "unmapped_types_as_unknown": []
+    },
+    "NO": {
+      "source": "energy-charts",
+      "zone": "energy-charts:no",
+      "file": "NO.csv",
+      "rows": 8784,
+      "mean_gco2_per_kwh": 29.9,
+      "generation_weighted_gco2_per_kwh": 29.6,
+      "min": 25.49,
+      "max": 39.68,
+      "fuel_share": {
+        "biomass": 0.0026,
+        "gas": 0.0106,
+        "hydro": 0.8899,
+        "solar": 0.0,
+        "unknown": 0.002,
+        "wind": 0.0948
+      },
+      "interpolated_hours_utc": [],
+      "sha256": "174876e4dec63544997507b58b47c123cd2c8300e00dc58384d1d6d5d9db2463",
+      "unmapped_types_as_unknown": []
+    },
+    "US-CAL": {
+      "source": "caiso",
+      "zone": "caiso:CISO",
+      "file": "US-CAL.csv",
+      "rows": 8784,
+      "mean_gco2_per_kwh": 196.4,
+      "generation_weighted_gco2_per_kwh": 191.7,
+      "min": 50.59,
+      "max": 386.04,
+      "fuel_share": {
+        "biomass": 0.0202,
+        "coal": 0.0,
+        "gas": 0.3436,
+        "geothermal": 0.0351,
+        "hydro": 0.1197,
+        "nuclear": 0.0966,
+        "solar": 0.2676,
+        "unknown": 0.0,
+        "wind": 0.1171
+      },
+      "interpolated_hours_utc": [
+        "2024-01-11 23:00",
+        "2024-01-12 00:00",
+        "2024-01-12 01:00",
+        "2024-01-12 02:00",
+        "2024-01-12 03:00",
+        "2024-01-12 04:00",
+        "2024-01-12 05:00",
+        "2024-01-12 06:00",
+        "2024-01-12 07:00",
+        "2024-06-28 05:00",
+        "2024-06-28 06:00",
+        "2024-08-30 05:00",
+        "2024-08-30 06:00",
+        "2024-09-25 05:00",
+        "2024-09-25 06:00",
+        "2024-11-03 09:00"
+      ],
+      "sha256": "a23eb2834f3a2d401e4b07f2ad4cf833991312442ab6a2029e4aa6f4c5e44156",
+      "unmapped_types_as_unknown": []
+    }
+  }
+}

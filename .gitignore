@@ -49,3 +49,9 @@ code_cwm/experiments/reproduce/medium/simex/aux/
 code_cwm/experiments/reproduce/full/simex/output/
 code_cwm/experiments/reproduce/full/simex/aux/
 code_cwm/experiments/reproduce/eval/plots/
+
+# multi-DC solver cache (regenerable)
+cwm_multidc/results/cache.jsonl
+
+# raw public CI downloads (re-fetchable)
+cwm_multidc/data/public_ci/raw/

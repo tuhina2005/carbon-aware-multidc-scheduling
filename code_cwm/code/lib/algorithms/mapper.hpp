@@ -129,6 +129,19 @@ class CaWoMap {
 
     unsigned int final_compute_carbon_cost_fast();
 
+    // Multi-DC extension: excess (brown) energy per ORIGINAL profile interval,
+    // accumulated in 64 bit (power units x time units). Sum equals
+    // final_compute_carbon_cost_fast() whenever the latter does not overflow.
+    // energy_out (optional): TOTAL energy (idle + work, compute + links) per original
+    // interval, i.e. integral of P(t) over the interval, in power units x time units.
+    std::vector<unsigned long long> final_carbon_cost_per_interval(std::vector<unsigned long long>* energy_out = nullptr);
+    std::vector<unsigned long long> HEFT_carbon_cost_per_interval(std::vector<unsigned long long>* energy_out = nullptr);
+    std::vector<unsigned long long> carbon_cost_per_interval(
+      const std::vector<std::pair<unsigned int, unsigned int>>& times,
+      const std::vector<unsigned int>& procs,
+      const Schedule& sched,
+      std::vector<unsigned long long>* energy_out = nullptr);
+
     Schedule& get_final_schedule() { return final_schedule; }
 
     unsigned int compute_final_makespan();
