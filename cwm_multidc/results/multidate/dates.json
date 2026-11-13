@@ -1,23 +1,37 @@
 {
   "dates": [
     "2024-01-17",
-    "2024-02-21",
-    "2024-03-20",
     "2024-04-17",
-    "2024-05-15",
-    "2024-06-19",
     "2024-07-17",
-    "2024-08-21",
-    "2024-09-18",
-    "2024-10-16",
-    "2024-11-20",
-    "2024-12-18"
+    "2024-10-16"
   ],
   "start_hours_utc": [
     0,
     6,
     12,
     18
+  ],
+  "dcs": [
+    [
+      "DC_Frankfurt",
+      "DE"
+    ],
+    [
+      "DC_Oslo",
+      "NO"
+    ],
+    [
+      "DC_Paris",
+      "FR"
+    ],
+    [
+      "DC_Warsaw",
+      "PL"
+    ],
+    [
+      "DC_California",
+      "US-CAL"
+    ]
   ],
   "label": "Energy-Charts/ENTSO-E + CAISO 2024 (production-based life-cycle CI)"
 }

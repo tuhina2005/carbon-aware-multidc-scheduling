@@ -59,3 +59,6 @@ cwm_multidc/data/public_ci/raw/
 # pre-fix solver backups (identical to the results committed before the mapper.cpp fix; kept locally for comparison)
 cwm_multidc/results/cache_pre_fix_solver.jsonl
 cwm_multidc/results/pre_fix_solver/
+
+# run_chunks.sh scratch output (only the shared solver cache matters)
+cwm_multidc/results/_chunks/

@@ -401,7 +401,7 @@ def fig_attenuation(out: Path):
 
 
 # ---------------------------------------------------------------------------- tables
-TABLE_METHODS = ["B1", "B2", "B3", "B4", "B5", "A1", "A2", "C1"]
+TABLE_METHODS = ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "A1", "A2", "C1", "R1", "R3"]
 
 
 def gains_table(summ: pd.DataFrame, keys=("dag", "start_hour", "data_size_gb", "alpha")) -> pd.DataFrame:
@@ -488,7 +488,7 @@ def multidate_md(ms: pd.DataFrame, out: Path, info: dict):
     n_prob = ms[MD_KEYS].drop_duplicates().shape[0]
     lines = ["# multidate", "",
              f"> Carbon intensity: {info.get('label', '')} historical hourly data; {len(dates)} dates "
-             f"({dates[0]} … {dates[-1]}, third Wednesday of each month), start hours "
+             f"({', '.join(d[:7] for d in dates)}; third Wednesdays), start hours "
              f"{'/'.join(str(h) for h in info.get('start_hours_utc', []))} UTC. "
              f"{n_prob} problems, one CWM seed each (no C1 control).", ""]
     lines += _solver_warning(out)
@@ -533,7 +533,74 @@ def multidate_md(ms: pd.DataFrame, out: Path, info: dict):
             rows.append({"metric": metric, "eps_kwh_per_gb": e, "mean gain vs B3 %": 100 * g.mean(),
                          "share gain>=5%": (g >= 0.05).mean(), "share waiting": (ours.t_net_h > 0).mean()})
     lines += ["## ε_net sweep (post hoc)", "", pd.DataFrame(rows).round(3).to_markdown(index=False), ""]
+    lines += rule_md(ms, MD_KEYS)
+    nf = out / "multidate_noise_summary.csv"
+    if nf.exists():
+        lines += noise_md(ms, pd.read_csv(nf))
     (out / "multidate.md").write_text("\n".join(lines))
+
+
+def rule_md(summ: pd.DataFrame, keys, base: str = "B3") -> list[str]:
+    """How much of Ours' gain over ``base`` the theory-guided rule (R1/R3) captures, at what cost."""
+    if "R3" not in set(summ.method):
+        return []
+    lines = [f"## Theory-guided rule vs full search (gain over {base})", "",
+             "Capture = Σ(base − rule) / Σ(base − Ours) over problems where Ours beats the base by > 0.1 %. "
+             "Solver calls: rule ≤ 2 (R1) or ≤ 4 (R3), one of them the reference schedule; Ours = all grid points.", ""]
+    rows = []
+    for metric in ("location", "brown"):
+        d = summ[(summ.metric == metric) & np.isclose(summ.eps_kwh_per_gb, 0.02)]
+        piv = d.pivot_table(index=keys, columns="method", values="total_gco2", aggfunc="first")
+        if base not in piv or "Ours" not in piv:
+            continue
+        o = d[d.method == "Ours"].set_index(keys)
+        won = piv[(piv[base] > 0) & (piv["Ours"] < piv[base] * 0.999)]
+        for r in ("R1", "R3"):
+            if r not in piv:
+                continue
+            w = won[["Ours", base, r]].dropna()
+            cap = (w[base] - w[r]).sum() / (w[base] - w["Ours"]).sum() if len(w) else np.nan
+            g = _gain(piv, r)
+            rows.append({"metric": metric, "rule": r, "problems Ours beats base": len(w),
+                         "capture of Ours' gain": cap, f"rule vs {base} mean %": 100 * _gain(piv[[r, base]].rename(columns={r: "Ours"}), base).mean(),
+                         "Ours vs rule mean %": 100 * g.mean(), "Ours vs rule max %": 100 * g.max(),
+                         "rule = Ours (share)": float(np.isclose(piv[r], piv["Ours"]).mean()),
+                         "Ours solver calls (mean)": o.n_evals.mean()})
+    lines += [pd.DataFrame(rows).round(3).to_markdown(index=False), ""] if rows else []
+    return lines
+
+
+def noise_md(ms: pd.DataFrame, ns: pd.DataFrame) -> list[str]:
+    """Noise control: the multi-date problems where Ours beat B3 by >= 5 % (location, one seed),
+    re-solved with 3 seeds and the equal-solver-budget control C1."""
+    lines = ["## Noise control: winning problems re-solved with 3 seeds + C1", "",
+             "Problems where Ours beat B3 by ≥ 5 % (location metric, ε = 0.02, one seed) re-solved with seeds "
+             "42/43/44 for every method and C1 = B3's configuration with Ours' number of CWM calls. "
+             "A gain that survives against C1 is not best-of-N luck of the heuristic.", ""]
+    rows = []
+    for metric in ("location", "brown"):
+        _, p1, _, _ = _md_pivots(ms, metric)
+        _, p3, o3, b3 = _md_pivots(ns, metric)
+        if p3.empty:
+            continue
+        idx = p3.index
+        g1 = _gain(p1.reindex(idx), "B3")
+        g3, gc = _gain(p3, "B3"), _gain(p3, "C1")
+        rows.append({"metric": metric, "n": len(idx), "gain vs B3, 1 seed (mean %)": 100 * g1.mean(),
+                     "gain vs B3, 3 seeds (mean %)": 100 * g3.mean(),
+                     "gain vs C1 (mean %)": 100 * gc.mean(), "gain vs C1 (median %)": 100 * gc.median(),
+                     "share ≥ 5 % vs C1": (gc >= 0.05).mean(), "share ≤ 0 vs C1": (gc <= 0).mean(),
+                     "Ours waits (share)": (o3.t_net_h > 0).mean()})
+        if metric == "location":
+            same = o3.dc == b3.dc
+            dnet = (b3.net_gco2 - o3.net_gco2)[same]
+            dcomp = (b3.comp_gco2 - o3.comp_gco2)[same]
+            note = (f"- Location, same DC as B3 ({int(same.sum())} problems): network saving {dnet.sum() / 1e3:.2f} kg, "
+                    f"compute change {-dcomp.sum() / 1e3:+.2f} kg (compute worse in {int((dcomp < -1e-9).sum())}, "
+                    f"better in {int((dcomp > 1e-9).sum())}).")
+    if rows:
+        lines += [pd.DataFrame(rows).round(3).to_markdown(index=False), "", note, ""]
+    return lines
 
 
 def fig_multidate(ms: pd.DataFrame, out: Path, info: dict):
@@ -569,7 +636,7 @@ def fig_multidate(ms: pd.DataFrame, out: Path, info: dict):
     cb = fig.colorbar(im, ax=axes, shrink=0.8, pad=0.02)
     cb.set_label("mean gain over DAGs, Δ and α (%)")
     dates = info.get("dates", [])
-    fig.suptitle("Ours vs B3 and A1 across 2024 (third Wednesday of each month), ε = 0.02 kWh/GB", fontsize=10)
+    fig.suptitle(f"Ours vs B3 and A1 across 2024 ({len(dates)} third-Wednesday dates), ε = 0.02 kWh/GB", fontsize=10)
     note = (f"Carbon intensity: {info.get('label', '')} historical hourly data, "
             f"{len(dates)} dates. Each cell: mean over atacseq200/eager1000 × Δ ∈ {{100 GB, 1 TB}} × α ∈ {{1.5, 2, 2.5}}.")
     import textwrap
@@ -581,6 +648,190 @@ def fig_multidate(ms: pd.DataFrame, out: Path, info: dict):
 def dt_month(s: str) -> str:
     import calendar as _cal
     return _cal.month_abbr[int(s[5:7])]
+
+
+HW_KEYS = ["scenario", "ci_date", "dag", "start_hour", "data_size_gb", "alpha"]
+
+
+def hetero_md(hs: pd.DataFrame, out: Path, info: dict):
+    """W1 tables: does per-DC hardware (processor mix + PUE) break CI-only placement?"""
+    lines = ["# hetero: heterogeneous DCs (processor mix + PUE)", "",
+             f"> Carbon intensity: {info.get('label', '')} historical hourly data; dates "
+             f"{', '.join(info.get('dates', []))}; start hours {'/'.join(map(str, info.get('start_hours_utc', [])))} UTC. "
+             "Tiers: efficient (PE4–PE6, PUE 1.10), standard (all six types, PUE 1.55), legacy (PE1–PE3 + PE6, "
+             "PUE 2.00). B6 = greenest DC by PUE × mean CI.", ""]
+    lines += _solver_warning(out)
+    for scen, tiers in info.get("scenarios", {}).items():
+        lines.append(f"- **{scen}**: " + (", ".join(f"{k}={v}" for k, v in tiers.items()) or "all standard"))
+    lines.append("")
+    for metric in ("location", "brown"):
+        d = hs[(hs.metric == metric) & np.isclose(hs.eps_kwh_per_gb, 0.02)]
+        if d.empty:
+            continue
+        lines += [f"## {metric} metric, ε = 0.02 kWh/GB", ""]
+        rows = []
+        for scen in [s for s in info.get("scenarios", {}) if s in set(d.scenario)] or sorted(d.scenario.unique()):
+            ds = d[d.scenario == scen]
+            piv = ds.pivot_table(index=HW_KEYS, columns="method", values="total_gco2", aggfunc="first")
+            o = ds[ds.method == "Ours"].set_index(HW_KEYS)
+            b3 = ds[ds.method == "B3"].set_index(HW_KEYS)
+            row = {"scenario": scen, "n": len(piv)}
+            for m in ("B3", "B6", "B5", "A1", "A2"):
+                g = _gain(piv, m)
+                row[f"vs {m} mean %"] = 100 * g.mean() if len(g) else np.nan
+                if m in ("B3", "B6"):
+                    row[f"vs {m} share ≥5 %"] = (g >= 0.05).mean() if len(g) else np.nan
+            row["Ours DC ≠ B3 DC"] = (o.dc != b3.dc).mean()
+            row["Ours waits"] = (o.t_net_h > 0).mean()
+            row["Ours DCs"] = ", ".join(f"{DC_SHORT.get(k, k)} {n}" for k, n in o.dc.value_counts().items())
+            rows.append(row)
+        lines += [pd.DataFrame(rows).round(3).to_markdown(index=False), ""]
+    lines += rule_md(hs, HW_KEYS, base="B6")
+    (out / "hetero.md").write_text("\n".join(lines))
+
+
+def make_hetero(hz_dir: Path):
+    f = hz_dir / "hetero_summary.csv"
+    if not f.exists():
+        return
+    info_f = hz_dir / "scenarios.json"
+    hetero_md(pd.read_csv(f), hz_dir, json.loads(info_f.read_text()) if info_f.exists() else {})
+
+
+CT_KEYS = ["contention_rho", "ci_date", "dag", "start_hour", "data_size_gb", "alpha"]
+
+
+def _ct_rows(cs: pd.DataFrame, metric: str) -> list[dict]:
+    d = cs[(cs.metric == metric) & np.isclose(cs.eps_kwh_per_gb, 0.02)]
+    rows = []
+    for rho in sorted(d.contention_rho.unique()):
+        dr = d[d.contention_rho == rho]
+        piv = dr.pivot_table(index=CT_KEYS, columns="method", values="total_gco2", aggfunc="first")
+        piv = piv.reindex(dr[CT_KEYS].drop_duplicates().set_index(CT_KEYS).index)  # keep infeasible rows
+        o = dr[dr.method == "Ours"].set_index(CT_KEYS)
+        b7 = dr[dr.method == "B7"].set_index(CT_KEYS)
+        miss = lambda m: dr[dr.method == m].total_gco2.isna().mean()  # noqa: E731 (pivot drops all-NaN columns)
+        row = {"ρ": rho, "n": len(piv), "Ours feasible": 1 - miss("Ours"), "B3 misses deadline": miss("B3")}
+        for m in ("B3", "B7", "A1", "A2"):
+            g = _gain(piv, m)
+            row[f"vs {m} mean %"] = 100 * g.mean() if len(g) else np.nan
+            if m in ("B3", "B7"):
+                row[f"vs {m} share ≥5 %"] = (g >= 0.05).mean() if len(g) else np.nan
+        both = o.join(b7, rsuffix="_b7", how="inner").dropna(subset=["dc", "dc_b7"])
+        row["Ours DC ≠ B7 DC"] = (both.dc != both.dc_b7).mean() if len(both) else np.nan
+        row["Ours waits"] = (o.t_net_h > 0).mean()
+        row["Ours DCs"] = ", ".join(f"{DC_SHORT.get(k, k)} {n}" for k, n in o.dc.value_counts().items())
+        rows.append(row)
+    return rows
+
+
+def contention_md(cs: pd.DataFrame, out: Path, info: dict):
+    """W2 tables: diurnal DC queues (clean grids most contended)."""
+    w = ", ".join(f"{DC_SHORT.get(k, k)} {v:g}" for k, v in info.get("weights", {}).items() if k != "DC_Mumbai")
+    lines = ["# contention: diurnal DC queues", "",
+             f"> Carbon intensity: {info.get('label', '')} historical hourly data; dates "
+             f"{', '.join(info.get('dates', []))}; start hours {'/'.join(map(str, info.get('start_hours_utc', [])))} UTC. "
+             f"Queue wait = ρ × weight × {info.get('peak_h', 2):g} h for arrivals in local business hours (09–18), "
+             f"× {info.get('off_h', 0.5):g} h otherwise. Weights: {w}. "
+             "B7 = send now to the greenest DC that can still meet the deadline after its queue.", ""]
+    lines += _solver_warning(out)
+    for metric in ("location", "brown"):
+        rows = _ct_rows(cs, metric)
+        if rows:
+            lines += [f"## {metric} metric, ε = 0.02 kWh/GB", "", pd.DataFrame(rows).round(3).to_markdown(index=False), ""]
+    for rho in sorted(cs.contention_rho.unique()):
+        sub = rule_md(cs[cs.contention_rho == rho], CT_KEYS, base="B7")
+        if sub:
+            lines += [sub[0] + f", ρ = {rho:g}"] + sub[1:]
+    (out / "contention.md").write_text("\n".join(lines))
+
+
+def fig_contention(cs: pd.DataFrame, out: Path, info: dict):
+    """Gain of Ours over B3 and B7 vs contention level, and B3's deadline-miss rate (location metric)."""
+    rows = pd.DataFrame(_ct_rows(cs, "location"))
+    if rows.empty:
+        return
+    fig, axes = plt.subplots(1, 2, figsize=(10, 3.8))
+    for m, color in (("B3", METHOD_COLOR["B3"]), ("B7", SLOTS[6])):
+        axes[0].plot(rows["ρ"], rows[f"vs {m} mean %"], marker="o", color=color, lw=2,
+                     markeredgecolor=SURFACE, label=f"Ours vs {m}: {BASELINE_NAMES[m]}")
+    axes[0].axhline(0, color=TEXT2, lw=0.8)
+    axes[0].set_xlabel("Contention level ρ")
+    axes[0].set_ylabel("Mean gain of Ours (%, location metric)")
+    axes[0].set_title("Gain over CI-only (B3) and queue-aware (B7) placement", fontsize=9)
+    axes[0].legend(fontsize=7)
+    axes[1].bar(rows["ρ"].astype(str), 100 * rows["B3 misses deadline"], color=METHOD_COLOR["B3"], width=0.5)
+    for x, v in zip(rows["ρ"].astype(str), rows["B3 misses deadline"]):
+        axes[1].annotate(f"{100 * v:.0f}%", (x, 100 * v), xytext=(0, 3), textcoords="offset points",
+                         ha="center", fontsize=8, color=TEXT2)
+    axes[1].set_xlabel("Contention level ρ")
+    axes[1].set_ylabel("Problems where B3 misses the deadline (%)")
+    axes[1].set_title("CI-only placement under queues", fontsize=9)
+    import textwrap
+    note = (f"Carbon intensity: {info.get('label', '')} historical hourly data, dates {', '.join(info.get('dates', []))}. "
+            "Each point: mean over atacseq200/eager1000 × Δ ∈ {100 GB, 1 TB} × α ∈ {2, 2.5} × 4 start hours.")
+    fig.text(0.01, 0.005, textwrap.fill(note, 150), color=TEXT2, fontsize=7, ha="left", va="bottom")
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.savefig(out / "fig_contention.png", dpi=180)
+    plt.close(fig)
+
+
+def make_contention(ct_dir: Path):
+    f = ct_dir / "contention_summary.csv"
+    if not f.exists():
+        return
+    info_f = ct_dir / "contention.json"
+    info = json.loads(info_f.read_text()) if info_f.exists() else {}
+    cs = pd.read_csv(f)
+    contention_md(cs, ct_dir, info)
+    fig_contention(cs, ct_dir, info)
+
+
+def substitution_md(full: pd.DataFrame, sub: pd.DataFrame, out: Path, info: dict):
+    """H6: paired comparison of the same problems with all DCs vs without a flat clean grid."""
+    import math
+
+    dcs = ", ".join(n.replace("DC_", "") for n, _ in info.get("dcs", []))
+    lines = ["# substitution: is timing worth more without a flat clean grid? (H6)", "",
+             f"> Same problems as `multidate` ({', '.join(info.get('dates', []))}; start hours "
+             f"{'/'.join(map(str, info.get('start_hours_utc', [])))} UTC), candidate DCs restricted to {dcs}. "
+             "Hypothesis fixed before running: Ours' gain over B3 is larger without Oslo (hydro) and Paris (nuclear), "
+             "whose CI barely changes within a day.", ""]
+    lines += _solver_warning(out)
+    for metric in ("location", "brown"):
+        rows = []
+        for eps in sorted(set(full.eps_kwh_per_gb) & set(sub.eps_kwh_per_gb)):
+            pv = {}
+            for name, s in (("all DCs", full), (f"only {dcs}", sub)):
+                d = s[(s.metric == metric) & np.isclose(s.eps_kwh_per_gb, eps)]
+                pv[name] = d.pivot_table(index=MD_KEYS, columns="method", values="total_gco2", aggfunc="first")
+            (na, pa), (nb, pb) = pv.items()
+            ga, gb = 1 - pa.Ours / pa.B3.where(pa.B3 > 0), 1 - pb.Ours / pb.B3.where(pb.B3 > 0)
+            diff = (gb - ga).dropna()
+            diff = diff[diff.abs() > 1e-9]
+            n, k = len(diff), int((diff > 0).sum())
+            p = min(1.0, 2 * sum(math.comb(n, i) for i in range(max(k, n - k), n + 1)) / 2 ** n) if n else np.nan
+            for name, pp, g in ((na, pa, ga), (nb, pb, gb)):
+                won = pp[pp.Ours < pp.B3 * 0.999]
+                cap = ((won.B3 - won.R3).sum() / (won.B3 - won.Ours).sum()) if "R3" in won and len(won) else np.nan
+                rows.append({"ε": eps, "DCs": name, "n": int(g.notna().sum()), "gain vs B3 mean %": 100 * g.mean(),
+                             "share ≥5 %": (g >= 0.05).mean(),
+                             "value of waiting vs A1 mean %": 100 * _gain(pp, "A1").mean(),
+                             "saving vs B3 kg (mean)": ((pp.B3 - pp.Ours) / 1e3).mean(),
+                             "R3 capture": cap,
+                             "paired: larger without flat grid": f"{k}/{n}" if name != na else "",
+                             "sign-test p": p if name != na else np.nan})
+        lines += [f"## {metric} metric", "", pd.DataFrame(rows).round(4).to_markdown(index=False), ""]
+    (out / "substitution.md").write_text("\n".join(lines))
+
+
+def make_substitution(results: Path):
+    f, g = results / "substitution" / "substitution_summary.csv", results / "multidate" / "multidate_summary.csv"
+    if not (f.exists() and g.exists()):
+        return
+    info_f = results / "substitution" / "dates.json"
+    substitution_md(pd.read_csv(g), pd.read_csv(f), results / "substitution",
+                    json.loads(info_f.read_text()) if info_f.exists() else {})
 
 
 def make_multidate(md_dir: Path):
@@ -620,4 +871,7 @@ def make_all(results: Path):
     fig_attenuation(results)
     _style()
     make_multidate(results / "multidate")
+    make_hetero(results / "hetero")
+    make_contention(results / "contention")
+    make_substitution(results)
     print(f"figures/tables written to {results}")

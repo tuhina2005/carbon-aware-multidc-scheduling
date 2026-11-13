@@ -6,6 +6,9 @@ Usage (from the repository root):
     python -m cwm_multidc.experiments headline     # Ours vs baselines + ablations + equal-budget control
     python -m cwm_multidc.experiments sensitivity  # time scale kappa, bandwidth, CI forecast error
     python -m cwm_multidc.experiments multidate --ci-dir DIR   # same problems over 12 dates x 4 start hours
+    python -m cwm_multidc.experiments multidate-noise --ci-dir DIR  # 3 seeds + C1 where Ours beats B3 by >= 5 %
+    python -m cwm_multidc.experiments hetero --ci-dir DIR  # per-DC hardware scenarios (W1)
+    python -m cwm_multidc.experiments contention --ci-dir DIR  # diurnal DC queues (W2)
     python -m cwm_multidc.experiments plot         # figures + tables from the CSVs
 
 All solver calls go through a persistent cache (``results/cache.jsonl``), so every
@@ -35,7 +38,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .cwm_runner import DAG_DIR, DEFAULT_CLUSTER, REPO_ROOT, CWMRunner, ResultCache
-from .data_loader import DEFAULT_DCS, TimeScale, build_topology, hours_from_series_start, perturb_ci, scan_ci_dir, with_ci
+from .data_loader import DEFAULT_DCS, HardwareTier, QueueSpec, TimeScale, build_topology, hours_from_series_start, perturb_ci, scan_ci_dir, with_ci
 from .optimizer import Problem, SearchResult, evaluate, solve
 
 RESULTS = REPO_ROOT / "cwm_multidc" / "results"
@@ -132,6 +135,10 @@ MD_SIZES_GB = (100.0, 1000.0)
 MD_ALPHAS = (1.5, 2.0, 2.5)
 MD_START_HOURS = (0, 6, 12, 18)
 MD_DIR = "multidate"
+# Seasonal subset used for the final results (Jan, Apr, Jul, Oct third Wednesdays).  The pre-fix
+# 12-date run showed every season behaves alike, so 4 dates keep the conclusions at a third of the
+# compute; `--dates all` runs all 12.
+MD_DATES_IDX = (0, 3, 6, 9)
 
 
 def third_wednesdays(year: int = 2024) -> tuple[str, ...]:
@@ -143,11 +150,68 @@ def third_wednesdays(year: int = 2024) -> tuple[str, ...]:
     return tuple(out)
 
 
+# W1: heterogeneous DCs.  A tier = processor mix (CWM cluster file with 72 processors, so the 5112
+# communication links stay valid) + facility PUE:
+#   efficient  PE4-PE6 (faster: HEFT makespan 168/214 for atacseq200/eager1000), PUE 1.10 (hyperscale)
+#   standard   the shared CWM "small" cluster (all six types, 168/335),         PUE 1.55 (industry average)
+#   legacy     PE1-PE3 + PE6 (slower: 204/448),                                PUE 2.00 (older facility)
+# Every DC not named in a scenario is "standard".  Scenarios are fixed before any run:
+#   homogeneous  every DC standard (= the baseline model)
+#   aligned      the cleanest grids (Oslo, Paris) have efficient hardware
+#   opposed      the cleanest grids have legacy hardware, the dirtier remote ones efficient
+#   mixed        one clean grid legacy (Oslo), one remote efficient (California)
+HW_DIR = REPO_ROOT / "cwm_multidc" / "data" / "clusters"
+HW_SCENARIOS = {
+    "homogeneous": {},
+    "aligned": {"DC_Oslo": "efficient", "DC_Paris": "efficient"},
+    "opposed": {"DC_Oslo": "legacy", "DC_Paris": "legacy", "DC_Warsaw": "efficient", "DC_California": "efficient"},
+    "mixed": {"DC_Oslo": "legacy", "DC_California": "efficient"},
+}
+# Jan (Oslo is the greenest grid) and Jul (Paris is): the two regimes in which a legacy Oslo
+# can or cannot change the decision.  Chosen after the smoke test showed grid CI differences
+# (about 5x) dwarf realistic PUE differences (at most 2x), so the cases that can flip are the
+# close calls between the two clean grids.
+HW_DATES_IDX = (0, 6)
+HW_START_HOURS = (6,)  # the hour where waiting matters most; one hour keeps W1 to about 1 h
+HW_DIRNAME = "hetero"
+
+
+HW_TIERS = {
+    "efficient": HardwareTier("efficient", HW_DIR / "efficient.json", 1.10),
+    "standard": HardwareTier("standard", None, 1.55),
+    "legacy": HardwareTier("legacy", HW_DIR / "legacy.json", 2.00),
+}
+
+
+def hw_tiers(scenario: str, dcs=DEFAULT_DCS) -> dict:
+    named = HW_SCENARIOS[scenario]
+    return {name: HW_TIERS[named.get(name, "standard")] for name, _ in dcs}
+
+
+# W2: contention.  Each DC has a diurnal queue: a job that becomes ready there waits
+# rho * weight * CT_PEAK_H hours if it arrives in local business hours (09-18, DST-aware) and
+# rho * weight * CT_OFF_H hours otherwise.  Weights encode "clean regions attract load": the two
+# cleanest grids are the most contended.  Fixed before any run; rho = 0 is the baseline model.
+CT_WEIGHTS = {"DC_Oslo": 1.0, "DC_Paris": 1.0, "DC_Frankfurt": 0.5, "DC_California": 0.5,
+              "DC_Warsaw": 0.25, "DC_Mumbai": 0.5}
+CT_PEAK_H, CT_OFF_H = 2.0, 0.5
+CT_RHOS = (0.0, 1.0, 2.0)
+CT_DATES_IDX = (0, 6)  # Jan (Oslo greenest), Jul (Paris greenest)
+CT_START_HOURS = (0, 6, 12, 18)
+CT_ALPHAS = (2.0, 2.5)  # tighter deadlines leave no room for any queue
+CT_DIRNAME = "contention"
+
+
+def ct_queues(rho: float, dcs=DEFAULT_DCS) -> dict:
+    return {name: QueueSpec(rho * CT_WEIGHTS.get(name, 0.5) * CT_PEAK_H, rho * CT_WEIGHTS.get(name, 0.5) * CT_OFF_H)
+            for name, _ in dcs} if rho > 0 else {}
+
+
 METRICS = ("brown", "location")
 
 SUMMARY_FIELDS = ["experiment", "dag", "start_hour", "data_size_gb", "alpha", "deadline_units", "m_ref_units",
                   "units_per_hour", "bandwidth_gbps", "forecast_sigma", "forecast_seed", "metric", "eps_kwh_per_gb",
-                  "synthetic_ci", "ci_source", "ci_date", "greenest_dc", "method", "dc", "t_net_h", "scheduler", "net_gco2", "comp_gco2",
+                  "synthetic_ci", "ci_source", "ci_date", "scenario", "hardware", "contention_rho", "greenest_dc", "method", "dc", "t_net_h", "scheduler", "net_gco2", "comp_gco2",
                   "total_gco2", "comp_brown_kwh", "comp_dyn_kwh", "d_prime_units", "n_evals", "n_cwm_calls",
                   "separable_bound_gco2", "nonmono_drops", "nonmono_steps"]
 
@@ -198,9 +262,10 @@ def summary_rows(res: SearchResult, meta: dict, eps_values=EPS_SWEEP) -> list[di
 
 
 class Runner:
-    def __init__(self, tag: str, ci: CIConfig, out: Path = RESULTS):
+    def __init__(self, tag: str, ci: CIConfig, out: Path = RESULTS, write_ci: bool = True):
         out.mkdir(parents=True, exist_ok=True)
-        ci.write(out)
+        if write_ci:
+            ci.write(out)
         self.tag, self.ci = tag, ci
         self.cwm = CWMRunner(cache=ResultCache(RESULTS / "cache.jsonl"))  # one cache for every study
         self.evals_w = _Writer(out / f"{tag}_evals.csv", None)
@@ -210,14 +275,14 @@ class Runner:
         self.lock = threading.Lock()
 
     def topology(self, dag_path: Path, start: int, ts: TimeScale, bandwidth: float = 1.0,
-                 ci: CIConfig | None = None):
+                 ci: CIConfig | None = None, hardware: dict | None = None, queues: dict | None = None):
         ci = ci or self.ci
         m = self.cwm.heft_makespan(dag_path)
         alpha_max = max(ALPHAS + HEADLINE_ALPHAS)
         hours = int(math.ceil(alpha_max * m / ts.units_per_hour)) + 2
         return build_topology(hours, DEFAULT_CLUSTER, dcs=ci.dcs, ci_csv=ci.ci_csv,
                               start_hour=ci.offset + start,
-                              timescale=ts, bandwidth_gbps=bandwidth)
+                              timescale=ts, bandwidth_gbps=bandwidth, hardware=hardware, queues=queues)
 
     def log(self, total: int, msg: str):
         with self.lock:
@@ -237,8 +302,9 @@ def _fmt(res: SearchResult) -> str:
     return f"Ours={b.dc} T_net={b.t_net_s / 3600:.2f}h total={b.total_gco2 / 1000:.2f}kg ({len(res.evaluations)} evals)"
 
 
-def run_problems(configs, tag: str, seeds, control: bool, ci: CIConfig, outer: int = 2) -> None:
-    R = Runner(tag, ci)
+def run_problems(configs, tag: str, seeds, control: bool, ci: CIConfig, outer: int = 2,
+                 out: Path = RESULTS) -> None:
+    R = Runner(tag, ci, out)
     configs = list(configs)
 
     def one(cfg):
@@ -256,16 +322,16 @@ def run_problems(configs, tag: str, seeds, control: bool, ci: CIConfig, outer: i
 
 def cmd_grid(args) -> None:
     run_problems(itertools.product(GRID_DAGS, (GRID_START_HOUR,), DATA_SIZES_GB, ALPHAS),
-                 "grid", seeds=(42,), control=False, ci=_ci(args))
+                 "grid", seeds=(42,), control=False, ci=_ci(args), out=_out(args))
 
 
 def cmd_headline(args) -> None:
     run_problems(itertools.product(HEADLINE_DAGS, HEADLINE_START_HOURS, (1000.0,), HEADLINE_ALPHAS),
-                 "headline", seeds=HEADLINE_SEEDS, control=True, ci=_ci(args))
+                 "headline", seeds=HEADLINE_SEEDS, control=True, ci=_ci(args), out=_out(args))
 
 
 def cmd_sensitivity(args) -> None:
-    R = Runner("sensitivity", _ci(args))
+    R = Runner("sensitivity", _ci(args), _out(args))
     dag_path = DAG_DIR / f"{SENS_DAG}.dot"
     jobs = ([("kappa", u, 1.0, 0.0, 0) for u in SENS_UNITS_PER_HOUR]
             + [("bandwidth", 30, b, 0.0, 0) for b in SENS_BANDWIDTH if b != 1.0]
@@ -313,14 +379,33 @@ def cmd_sensitivity(args) -> None:
         list(ex.map(one, jobs))
 
 
+# H6 (substitution test, fixed before running): without a temporally flat clean grid (Oslo hydro,
+# Paris nuclear), timing should matter more, so Ours' gain over B3 should be larger.  Same problems
+# as `multidate`, candidate DCs restricted to the strongly varying grids.
+SUB_REGIONS = ("DE", "PL", "US-CAL")
+SUB_DIR = "substitution"
+
+
 def cmd_multidate(args) -> None:
     if args.ci_dir is None:
         raise SystemExit("multidate needs real CI: pass --ci-dir")
-    dates = tuple(args.dates.split(",")) if args.dates else third_wednesdays()
+    regions = getattr(args, "regions", None)
+    tag, subdir = ("substitution", SUB_DIR) if regions else ("multidate", MD_DIR)
+    if args.dates == "all":
+        dates = third_wednesdays()
+    elif args.dates:
+        dates = tuple(args.dates.split(","))
+    else:
+        dates = tuple(third_wednesdays()[i] for i in MD_DATES_IDX)
     cis = {d: CIConfig(args.ci_dir, d) for d in dates}
-    R = Runner("multidate", cis[dates[0]], RESULTS / MD_DIR)
-    (RESULTS / MD_DIR / "dates.json").write_text(json.dumps(
-        {"dates": list(dates), "start_hours_utc": list(MD_START_HOURS),
+    if regions:
+        for c in cis.values():
+            c.dcs = tuple(dc for dc in c.dcs if dc[1] in regions)
+            if not any(n == "DC_Frankfurt" for n, _ in c.dcs):
+                raise SystemExit("the source DC (DE) must stay in --regions")
+    R = Runner(tag, cis[dates[0]], _out(args) / subdir)
+    (_out(args) / subdir / "dates.json").write_text(json.dumps(
+        {"dates": list(dates), "start_hours_utc": list(MD_START_HOURS), "dcs": [list(d) for d in cis[dates[0]].dcs],
          "label": cis[dates[0]].label.rsplit("@", 1)[0]}, indent=2) + "\n")
     # cheapest problems first, so a partial run already covers every date
     jobs = sorted(itertools.product(dates, MD_START_HOURS, MD_DAGS, MD_SIZES_GB, MD_ALPHAS),
@@ -332,9 +417,115 @@ def cmd_multidate(args) -> None:
         dag_path = DAG_DIR / f"{dag}.dot"
         topo = R.topology(dag_path, start, TimeScale(), ci=ci)
         res = solve(Problem(dag_path, topo, size, alpha=alpha, seeds=(42,), equal_budget_control=False), R.cwm)
-        R.record(res, {"experiment": "multidate", "start_hour": start, "bandwidth_gbps": 1.0,
+        R.record(res, {"experiment": tag, "start_hour": start, "bandwidth_gbps": 1.0,
                        "ci_source": ci.label, "ci_date": date})
         R.log(len(jobs), f"{date} {dag} start={start} D={size:g}GB a={alpha}: {_fmt(res)}")
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        list(ex.map(one, jobs))
+
+
+NOISE_THRESHOLD = 0.05  # re-test multi-date problems where Ours beats B3 by at least this (location metric)
+
+
+def noise_problems(summary_csv: Path, threshold: float = NOISE_THRESHOLD) -> list[tuple]:
+    """(date, start, dag, size, alpha) of multi-date problems where Ours beats B3 by >= threshold,
+    location metric, eps = EPS_DEFAULT, in the single-seed run."""
+    import pandas as pd
+
+    s = pd.read_csv(summary_csv)
+    s = s[(s.metric == "location") & (abs(s.eps_kwh_per_gb - EPS_DEFAULT) < 1e-12)]
+    keys = ["ci_date", "start_hour", "dag", "data_size_gb", "alpha"]
+    piv = s.pivot_table(index=keys, columns="method", values="total_gco2", aggfunc="first")
+    win = piv[(piv["B3"] > 0) & (1 - piv["Ours"] / piv["B3"] >= threshold)]
+    return [(d, int(h), g, float(z), float(a)) for d, h, g, z, a in win.index]
+
+
+def cmd_multidate_noise(args) -> None:
+    """Noise control for the multi-date waiting gains: re-solve the winning problems with the headline
+    seeds and the equal-solver-budget control C1.  A gain that survives 3 seeds and beats C1 is not
+    best-of-N luck of the CWM heuristic."""
+    if args.ci_dir is None:
+        raise SystemExit("multidate-noise needs real CI: pass --ci-dir")
+    src = _out(args) / MD_DIR / "multidate_summary.csv"
+    if not src.exists():
+        raise SystemExit(f"{src} not found: run `multidate` first")
+    jobs = noise_problems(src)
+    cis = {d: CIConfig(args.ci_dir, d) for d in sorted({j[0] for j in jobs})}
+    R = Runner("multidate_noise", next(iter(cis.values())), _out(args) / MD_DIR, write_ci=False)
+    jobs.sort(key=lambda j: (MD_DAGS.index(j[2]), j))
+
+    def one(job):
+        date, start, dag, size, alpha = job
+        ci = cis[date]
+        dag_path = DAG_DIR / f"{dag}.dot"
+        topo = R.topology(dag_path, start, TimeScale(), ci=ci)
+        res = solve(Problem(dag_path, topo, size, alpha=alpha, seeds=HEADLINE_SEEDS, equal_budget_control=True),
+                    R.cwm)
+        R.record(res, {"experiment": "multidate_noise", "start_hour": start, "bandwidth_gbps": 1.0,
+                       "ci_source": ci.label, "ci_date": date})
+        R.log(len(jobs), f"{date} {dag} start={start} D={size:g}GB a={alpha}: {_fmt(res)}")
+
+    print(f"{len(jobs)} problems with location gain >= {NOISE_THRESHOLD:.0%} over B3", flush=True)
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        list(ex.map(one, jobs))
+
+
+def cmd_hetero(args) -> None:
+    if args.ci_dir is None:
+        raise SystemExit("hetero needs real CI: pass --ci-dir")
+    all_dates = third_wednesdays()
+    dates = tuple(args.dates.split(",")) if args.dates else tuple(all_dates[i] for i in HW_DATES_IDX)
+    scenarios = tuple(args.scenarios.split(",")) if args.scenarios else tuple(HW_SCENARIOS)
+    cis = {d: CIConfig(args.ci_dir, d) for d in dates}
+    out = _out(args) / HW_DIRNAME
+    R = Runner("hetero", cis[dates[0]], out)
+    (out / "scenarios.json").write_text(json.dumps(
+        {"dates": list(dates), "start_hours_utc": list(HW_START_HOURS), "scenarios": {s: HW_SCENARIOS[s] for s in scenarios},
+         "label": cis[dates[0]].label.rsplit("@", 1)[0]}, indent=2) + "\n")
+    jobs = sorted(itertools.product(scenarios, dates, HW_START_HOURS, MD_DAGS, MD_SIZES_GB, MD_ALPHAS),
+                  key=lambda j: (MD_DAGS.index(j[3]), scenarios.index(j[0]), j[1:]))
+
+    def one(job):
+        scen, date, start, dag, size, alpha = job
+        ci = cis[date]
+        dag_path = DAG_DIR / f"{dag}.dot"
+        topo = R.topology(dag_path, start, TimeScale(), ci=ci, hardware=hw_tiers(scen, ci.dcs))
+        res = solve(Problem(dag_path, topo, size, alpha=alpha, seeds=(42,), equal_budget_control=False), R.cwm)
+        hw = ";".join(f"{d.name}={d.hardware}" for d in topo.dcs)
+        R.record(res, {"experiment": "hetero", "scenario": scen, "hardware": hw, "start_hour": start,
+                       "bandwidth_gbps": 1.0, "ci_source": ci.label, "ci_date": date})
+        R.log(len(jobs), f"{scen} {date} {dag} start={start} D={size:g}GB a={alpha}: {_fmt(res)}")
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        list(ex.map(one, jobs))
+
+
+def cmd_contention(args) -> None:
+    if args.ci_dir is None:
+        raise SystemExit("contention needs real CI: pass --ci-dir")
+    all_dates = third_wednesdays()
+    dates = tuple(args.dates.split(",")) if args.dates else tuple(all_dates[i] for i in CT_DATES_IDX)
+    rhos = tuple(float(r) for r in args.rhos.split(",")) if args.rhos else CT_RHOS
+    cis = {d: CIConfig(args.ci_dir, d) for d in dates}
+    out = _out(args) / CT_DIRNAME
+    R = Runner("contention", cis[dates[0]], out)
+    (out / "contention.json").write_text(json.dumps(
+        {"dates": list(dates), "start_hours_utc": list(CT_START_HOURS), "rhos": list(rhos),
+         "weights": CT_WEIGHTS, "peak_h": CT_PEAK_H, "off_h": CT_OFF_H, "business_hours_local": [9, 18],
+         "label": cis[dates[0]].label.rsplit("@", 1)[0]}, indent=2) + "\n")
+    jobs = sorted(itertools.product(rhos, dates, CT_START_HOURS, MD_DAGS, MD_SIZES_GB, CT_ALPHAS),
+                  key=lambda j: (MD_DAGS.index(j[3]), j))
+
+    def one(job):
+        rho, date, start, dag, size, alpha = job
+        ci = cis[date]
+        dag_path = DAG_DIR / f"{dag}.dot"
+        topo = R.topology(dag_path, start, TimeScale(), ci=ci, queues=ct_queues(rho, ci.dcs))
+        res = solve(Problem(dag_path, topo, size, alpha=alpha, seeds=(42,), equal_budget_control=False), R.cwm)
+        R.record(res, {"experiment": "contention", "contention_rho": rho, "start_hour": start,
+                       "bandwidth_gbps": 1.0, "ci_source": ci.label, "ci_date": date})
+        R.log(len(jobs), f"rho={rho:g} {date} {dag} start={start} D={size:g}GB a={alpha}: {_fmt(res)}")
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         list(ex.map(one, jobs))
@@ -344,6 +535,12 @@ def cmd_plot(_args) -> None:
     from . import plots
 
     plots.make_all(RESULTS)
+
+
+def _out(args) -> Path:
+    """Where tables go.  The solver cache is always results/cache.jsonl, so a run with --out DIR
+    only warms the cache (used by run_chunks.sh) and a later run without it rebuilds results/."""
+    return Path(args.out).resolve() if getattr(args, "out", None) else RESULTS
 
 
 def _ci(args) -> CIConfig:
@@ -356,6 +553,8 @@ def main(argv=None) -> None:
     ci_args.add_argument("--ci-dir", type=Path, default=None,
                          help="directory of Electricity Maps hourly CSVs named <REGION>.csv "
                               "(DE, NO, FR, PL, US-CAL, IN); omit for synthetic CI")
+    ci_args.add_argument("--out", type=Path, default=None,
+                         help="write tables here instead of cwm_multidc/results (solver cache is shared)")
     ci_args.add_argument("--ci-start", default=DEFAULT_CI_START,
                          help=f"UTC date the experiment start hours fall on (real CI only; default {DEFAULT_CI_START})")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -363,8 +562,22 @@ def main(argv=None) -> None:
         sub.add_parser(name, parents=[ci_args]).set_defaults(fn=fn)
     md = sub.add_parser("multidate", parents=[ci_args])
     md.add_argument("--dates", default=None,
-                    help="comma-separated UTC dates (default: third Wednesday of each month of 2024)")
+                    help="comma-separated UTC dates, or 'all' for the third Wednesday of every month "
+                         "(default: Jan/Apr/Jul/Oct third Wednesdays)")
     md.set_defaults(fn=cmd_multidate)
+    sb = sub.add_parser("substitution", parents=[ci_args],
+                        help=f"multidate with candidate DCs restricted to {SUB_REGIONS} (H6)")
+    sb.add_argument("--dates", default=None)
+    sb.set_defaults(fn=cmd_multidate, regions=SUB_REGIONS)
+    sub.add_parser("multidate-noise", parents=[ci_args]).set_defaults(fn=cmd_multidate_noise)
+    hz = sub.add_parser("hetero", parents=[ci_args])
+    hz.add_argument("--dates", default=None, help="comma-separated UTC dates (default: Jan and Jul third Wednesdays)")
+    hz.add_argument("--scenarios", default=None, help=f"comma-separated subset of {list(HW_SCENARIOS)}")
+    hz.set_defaults(fn=cmd_hetero)
+    ct = sub.add_parser("contention", parents=[ci_args])
+    ct.add_argument("--dates", default=None, help="comma-separated UTC dates (default: Jan and Jul third Wednesdays)")
+    ct.add_argument("--rhos", default=None, help=f"comma-separated contention levels (default {CT_RHOS})")
+    ct.set_defaults(fn=cmd_contention)
     sub.add_parser("plot").set_defaults(fn=cmd_plot)
     args = ap.parse_args(argv)
     args.fn(args)

@@ -202,13 +202,16 @@ and every figure and table states the source in its footer.
 ## 6. Running experiments
 
 **One command:** `./reproduce_multidc.sh` (build, tests, every experiment, plots; ~12–14 h) or
-`./reproduce_multidc.sh quick` (~1.5 h, skips the multi-date study). Individual steps:
+`./reproduce_multidc.sh quick` (~1.5 h, skips the multi-date study). To split the full run into
+sessions of at most ~3 h that can be stopped and restarted safely, use `./run_chunks.sh 1` … `5`
+(`./run_chunks.sh status` shows progress). Individual steps:
 
 ```bash
 python -m cwm_multidc.experiments grid       # 2 DAGs x 5 data sizes x 7 deadlines (sweeps are slices)
 python -m cwm_multidc.experiments headline   # 4 DAGs x 2 start hours x 2 deadlines, 3 seeds, + C1 control
 python -m cwm_multidc.experiments sensitivity # kappa {60,120,240 s}, bandwidth {0.5..10 Gbps}, forecast error
 python -m cwm_multidc.experiments multidate --ci-dir DIR  # 12 dates x 4 start hours (real CI only)
+python -m cwm_multidc.experiments multidate-noise --ci-dir DIR  # 3 seeds + C1 where Ours beats B3 by >= 5 %
 python -m cwm_multidc.experiments plot       # results/fig_*.png, results/*.md, results/multidate/
 ```
 

@@ -12,8 +12,8 @@ import pandas as pd
 
 from cwm_multidc.experiments import MD_DIR, RESULTS
 
-IN_SEARCH_SPACE = ("B1", "B3", "B4", "B5", "A1", "A2")
-KEYS = ["experiment", "ci_date", "dag", "start_hour", "data_size_gb", "alpha", "units_per_hour",
+IN_SEARCH_SPACE = ("B1", "B3", "B4", "B5", "B6", "B7", "A1", "A2", "R1", "R3")
+KEYS = ["experiment", "scenario", "contention_rho", "ci_date", "dag", "start_hour", "data_size_gb", "alpha", "units_per_hour",
         "bandwidth_gbps", "metric", "eps_kwh_per_gb"]
 
 
@@ -46,6 +46,18 @@ class SummaryInvariantTest(unittest.TestCase):
 
     def test_multidate(self):
         self.check(RESULTS / MD_DIR / "multidate_summary.csv")
+
+    def test_multidate_noise(self):
+        self.check(RESULTS / MD_DIR / "multidate_noise_summary.csv")
+
+    def test_hetero(self):
+        self.check(RESULTS / "hetero" / "hetero_summary.csv")
+
+    def test_contention(self):
+        self.check(RESULTS / "contention" / "contention_summary.csv")
+
+    def test_substitution(self):
+        self.check(RESULTS / "substitution" / "substitution_summary.csv")
 
 
 if __name__ == "__main__":

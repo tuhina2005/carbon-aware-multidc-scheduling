@@ -1,0 +1,29 @@
+{
+  "label": "Energy-Charts/ENTSO-E + CAISO 2024 (production-based life-cycle CI)@2024-01-17",
+  "start_utc": "2024-01-17",
+  "offset_hours": 384,
+  "dcs": [
+    [
+      "DC_Frankfurt",
+      "DE"
+    ],
+    [
+      "DC_Warsaw",
+      "PL"
+    ],
+    [
+      "DC_California",
+      "US-CAL"
+    ]
+  ],
+  "files": {
+    "DE": "cwm_multidc/data/public_ci/DE.csv",
+    "NO": "cwm_multidc/data/public_ci/NO.csv",
+    "FR": "cwm_multidc/data/public_ci/FR.csv",
+    "PL": "cwm_multidc/data/public_ci/PL.csv",
+    "US-CAL": "cwm_multidc/data/public_ci/US-CAL.csv"
+  },
+  "solver_sha256": "8a456bbb33a02318401165011482fb5cdf8146673c163dac206ce5224d91a32a",
+  "git_commit": "737756b8c2a93ca3fb2a26de7e3985640d0627dd",
+  "git_dirty": true
+}

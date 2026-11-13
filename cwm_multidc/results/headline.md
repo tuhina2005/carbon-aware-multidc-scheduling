@@ -2,8 +2,6 @@
 
 > Carbon intensity: Energy-Charts/ENTSO-E + CAISO 2024 (production-based life-cycle CI) historical hourly data, window starting 2024-04-17 UTC.
 
-> ⚠ Produced with solver build `d849bc23fc71`, not the deployed `8a456bbb33a0`. pre-fix build: has the out-of-bounds read in mapper.cpp (results not bit-reproducible)
-
 Primary metric: **location** (marginal, location-based compute carbon). The **brown** metric is CWM's native objective; it is zero for any DC whose green budget covers the job, whatever that grid's CI, so it can favour a dirtier grid and is reported as secondary.
 
 ## location metric, ε = 0.02 kWh/GB: gain = 1 − Ours/other (total gCO₂)
@@ -15,9 +13,13 @@ Primary metric: **location** (marginal, location-based compute carbon). The **br
 | B3: Greenest-DC + CWM                      |  16 |         0     |           0     |        0     |            0     |              0 |
 | B4: Network-Optimized                      |  16 |         4.254 |           0     |       22.984 |            0.188 |              0 |
 | B5: Compute-Optimized                      |  16 |         0     |           0     |        0     |            0     |              0 |
+| B6: Efficiency-aware greenest DC + CWM     |  16 |         0     |           0     |        0     |            0     |              0 |
+| B7: Queue-aware greenest DC + CWM          |  16 |         0     |           0     |        0     |            0     |              0 |
 | A1: Ours-NoWait (best DC, T_net = 0)       |  16 |         0     |           0     |        0     |            0     |              0 |
 | A2: Ours-FixedDC (greenest DC, best T_net) |  16 |         0     |           0     |        0     |            0     |              0 |
 | C1: B3-bestN (equal solver budget)         |  16 |        -0.169 |          -0.052 |        0     |            0     |              0 |
+| R1: Rule, top-1 (≤ 2 solver calls)         |  16 |         0     |           0     |        0     |            0     |              0 |
+| R3: Rule, top-3 (≤ 4 solver calls)         |  16 |         0     |           0     |        0     |            0     |              0 |
 
 - Ours vs separable bound: median gap 0.0% (max 12.0%)
 - CWM non-monotonicity (Prop. 1 violations): 15.3% of consecutive arrival steps
@@ -31,9 +33,13 @@ Primary metric: **location** (marginal, location-based compute carbon). The **br
 | B3: Greenest-DC + CWM                      |  16 |        19.082 |           0     |      100     |            0.25  |              0 |
 | B4: Network-Optimized                      |  16 |        28.905 |           0     |      100     |            0.438 |              0 |
 | B5: Compute-Optimized                      |  16 |        19.102 |           0     |      100     |            0.25  |              0 |
+| B6: Efficiency-aware greenest DC + CWM     |  16 |        19.082 |           0     |      100     |            0.25  |              0 |
+| B7: Queue-aware greenest DC + CWM          |  16 |        19.082 |           0     |      100     |            0.25  |              0 |
 | A1: Ours-NoWait (best DC, T_net = 0)       |  15 |         0     |           0     |        0     |            0     |              0 |
 | A2: Ours-FixedDC (greenest DC, best T_net) |  16 |        19.082 |           0     |      100     |            0.25  |              0 |
 | C1: B3-bestN (equal solver budget)         |  16 |        18.593 |          -0.274 |      100     |            0.25  |              0 |
+| R1: Rule, top-1 (≤ 2 solver calls)         |  16 |        11.743 |           0     |      100     |            0.125 |              0 |
+| R3: Rule, top-3 (≤ 4 solver calls)         |  16 |        11.743 |           0     |      100     |            0.125 |              0 |
 
 - Ours vs separable bound: median gap 0.0% (max 27.6%)
 - CWM non-monotonicity (Prop. 1 violations): 12.0% of consecutive arrival steps

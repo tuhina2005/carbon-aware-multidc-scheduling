@@ -229,7 +229,9 @@ def perturb_ci(series: CITimeSeries, sigma: float, seed: int = 0, phi: float = 0
 
 def with_ci(topo: "Topology", transform) -> "Topology":
     """New topology with every DC's CI series replaced by ``transform(series)``."""
-    dcs = tuple(DataCentre(d.name, d.region, transform(d.ci), d.bandwidth_gbps) for d in topo.dcs)
+    from dataclasses import replace as _replace
+
+    dcs = tuple(_replace(d, ci=transform(d.ci)) for d in topo.dcs)  # keeps bandwidth and hardware
     return Topology(topo.source, dcs, topo.cluster, topo.timescale, topo.mapping, topo.cluster_json)
 
 
@@ -326,11 +328,32 @@ def wan_ci_profile_seconds(src: CITimeSeries, dst: CITimeSeries) -> dict[str, li
 
 # ------------------------------------------------------------------- topology
 @dataclass(frozen=True)
+class HardwareTier:
+    """A DC's hardware: processor mix (CWM cluster file; None = the shared cluster) and PUE."""
+
+    name: str
+    cluster_json: str | Path | None = None
+    pue: float = 1.0
+
+
+@dataclass(frozen=True)
 class DataCentre:
     name: str
     region: str
     ci: CITimeSeries
     bandwidth_gbps: float = 1.0  # from the source DC
+    # Optional per-DC hardware (a CWM cluster file, variant "small").  None = the topology's shared
+    # cluster, which keeps the homogeneous model (and its solver-cache keys) exactly as before.
+    cluster_json: str | None = None
+    cluster: "ClusterPower | None" = None
+    hardware: str = ""  # label, e.g. "efficient" / "standard" / "legacy"
+    # Facility power usage effectiveness: grid energy = PUE x IT energy.  1.0 (IT only) is the
+    # baseline model.  Applied to compute energy after the solver runs; this is exact when the
+    # DC's green budget scales with its facility power (excess and dynamic energy scale by PUE).
+    pue: float = 1.0
+    # Contention: hours a job waits in this DC's queue if it arrives during hour i of the series
+    # (same clock as ``ci``).  None = no queue (the baseline model).
+    queue_hours: tuple[float, ...] | None = None
 
     @property
     def synthetic(self) -> bool:
@@ -373,10 +396,34 @@ class Topology:
     def source_dc(self) -> DataCentre:
         return self.dc(self.source)
 
+    def cluster_of(self, name: str) -> "ClusterPower":
+        """Power figures of DC ``name``'s hardware (its own cluster, else the shared one)."""
+        return self.dc(name).cluster or self.cluster
+
+    def cluster_json_of(self, name: str) -> str:
+        return self.dc(name).cluster_json or self.cluster_json
+
+    @property
+    def heterogeneous(self) -> bool:
+        return any(d.cluster_json for d in self.dcs)
+
     def profiles(self, name: str) -> tuple[dict[str, Any], dict[str, Any]]:
         if name not in self._profiles:
-            self._profiles[name] = ci_to_profiles(self.dc(name).ci, self.cluster, self.timescale, self.mapping)
+            self._profiles[name] = ci_to_profiles(self.dc(name).ci, self.cluster_of(name), self.timescale,
+                                                  self.mapping)
         return self._profiles[name]
+
+    def queue_wait_s(self, name: str, t_s: float) -> float:
+        """Queue wait (seconds) for a job that becomes ready at DC ``name`` at time ``t_s``."""
+        q = self.dc(name).queue_hours
+        if not q:
+            return 0.0
+        i = min(max(int(t_s // SECONDS_PER_HOUR), 0), len(q) - 1)
+        return q[i] * SECONDS_PER_HOUR
+
+    @property
+    def contended(self) -> bool:
+        return any(d.queue_hours and any(d.queue_hours) for d in self.dcs)
 
     def wan_ci(self, name: str) -> dict[str, list[float]]:
         return wan_ci_profile_seconds(self.source_dc.ci, self.dc(name).ci)
@@ -384,6 +431,52 @@ class Topology:
     @property
     def synthetic(self) -> bool:
         return any(d.synthetic for d in self.dcs)
+
+
+# ------------------------------------------------------------------ contention
+REGION_TZ = {"DE": "Europe/Berlin", "NO": "Europe/Oslo", "FR": "Europe/Paris", "PL": "Europe/Warsaw",
+             "US-CAL": "America/Los_Angeles", "IN": "Asia/Kolkata"}
+
+
+@dataclass(frozen=True)
+class QueueSpec:
+    """Diurnal queue at a DC: ``peak_h`` hours of waiting for jobs arriving in local business hours
+    [``busy_from``, ``busy_to``), ``off_h`` otherwise (local time, DST-aware)."""
+
+    peak_h: float
+    off_h: float = 0.0
+    busy_from: int = 9
+    busy_to: int = 18
+
+
+def series_utc_start(series: "CITimeSeries"):
+    """UTC datetime of sample 0 (handles window suffixes such as '2024-01-01 00:00:00+2568h';
+    synthetic series start at 2024-01-01 00:00 UTC)."""
+    import datetime as _dt
+
+    base, *shifts = series.start_utc.split("+")
+    hours = sum(int(s.rstrip("h")) for s in shifts if s.endswith("h"))
+    try:
+        t0 = _dt.datetime.fromisoformat(base.strip().replace("Z", "+00:00"))
+    except ValueError:
+        t0 = _dt.datetime(2024, 1, 1)
+    if t0.tzinfo is None:
+        t0 = t0.replace(tzinfo=_dt.timezone.utc)
+    return t0.astimezone(_dt.timezone.utc) + _dt.timedelta(hours=hours)
+
+
+def diurnal_queue(series: "CITimeSeries", spec: QueueSpec) -> tuple[float, ...]:
+    """Hourly queue waits on ``series``' clock for a DC in ``series.region``."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo(REGION_TZ[series.region])
+    t0 = series_utc_start(series)
+    out = []
+    for i in range(len(series)):
+        h = (t0 + _dt.timedelta(hours=i)).astimezone(tz).hour
+        out.append(spec.peak_h if spec.busy_from <= h < spec.busy_to else spec.off_h)
+    return tuple(out)
 
 
 DEFAULT_DCS: tuple[tuple[str, str], ...] = (
@@ -455,9 +548,17 @@ def build_topology(
     bandwidth_gbps: float | Mapping[str, float] = 1.0,
     timescale: TimeScale = TimeScale(),
     mapping: BudgetMapping = BudgetMapping(),
+    hardware: Mapping[str, HardwareTier] | None = None,
+    queues: Mapping[str, QueueSpec] | None = None,
 ) -> Topology:
     """Assemble a topology.  Regions with a CSV in ``ci_csv`` use real data (window
-    ``[start_hour, start_hour + hours)``); all others fall back to :func:`synthetic_ci`."""
+    ``[start_hour, start_hour + hours)``); all others fall back to :func:`synthetic_ci`.
+
+    ``hardware`` optionally maps a DC name to a :class:`HardwareTier` (own cluster file, same
+    variant, and PUE); DCs not in it use ``cluster_json`` with PUE 1.  ``queues`` optionally maps a
+    DC name to a :class:`QueueSpec` (diurnal queue wait); DCs not in it have no queue."""
+    from dataclasses import replace as _replace
+
     cluster = ClusterPower.from_cluster_json(cluster_json, variant)
     out = []
     for name, region in dcs:
@@ -466,5 +567,15 @@ def build_topology(
         else:
             series = synthetic_ci(region, hours, seed=seed, start_utc_hour=start_hour)
         bw = bandwidth_gbps[name] if isinstance(bandwidth_gbps, Mapping) else bandwidth_gbps
-        out.append(DataCentre(name, region, series, float(bw)))
+        hw = (hardware or {}).get(name)
+        if hw is None:
+            out.append(DataCentre(name, region, series, float(bw)))
+        elif hw.cluster_json is not None and Path(hw.cluster_json).resolve() != Path(cluster_json).resolve():
+            out.append(DataCentre(name, region, series, float(bw), str(Path(hw.cluster_json).resolve()),
+                                  ClusterPower.from_cluster_json(hw.cluster_json, variant), hw.name, float(hw.pue)))
+        else:
+            out.append(DataCentre(name, region, series, float(bw), hardware=hw.name, pue=float(hw.pue)))
+        q = (queues or {}).get(name)
+        if q is not None and (q.peak_h > 0 or q.off_h > 0):
+            out[-1] = _replace(out[-1], queue_hours=diurnal_queue(series, q))
     return Topology(source, tuple(out), cluster, timescale, mapping, str(cluster_json))

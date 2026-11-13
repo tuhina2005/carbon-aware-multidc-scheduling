@@ -32,29 +32,37 @@ from __future__ import annotations
 
 import math
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Iterable, Sequence
+
+import numpy as np
 
 from .cwm_runner import STATUS_INFEASIBLE, STATUS_OK, CWMRunner
 from .data_loader import SECONDS_PER_HOUR, Topology
 from .profile_shifting import shift_profile, truncate_profile
 from .wan_model import WANConfig, calculate_transfer_duration, evaluate_wan_transfer
 
-BASELINES = ("B1", "B2", "B3", "B4", "B5")
+BASELINES = ("B1", "B2", "B3", "B4", "B5", "B6", "B7")
 BASELINE_NAMES = {
     "B1": "CWM-Local",
     "B2": "Greenest-DC + HEFT",
     "B3": "Greenest-DC + CWM",
     "B4": "Network-Optimized",
     "B5": "Compute-Optimized",
+    "B6": "Efficiency-aware greenest DC + CWM",
+    "B7": "Queue-aware greenest DC + CWM",
     "Ours": "Joint Spatiotemporal",
     "A1": "Ours-NoWait (best DC, T_net = 0)",
     "A2": "Ours-FixedDC (greenest DC, best T_net)",
     "C1": "B3-bestN (equal solver budget)",
+    "R1": "Rule, top-1 (≤ 2 solver calls)",
+    "R3": "Rule, top-3 (≤ 4 solver calls)",
 }
 ABLATIONS = ("A1", "A2", "C1")
+RULES = ("R1", "R3")  # theory-guided rule, top-1 / top-3 candidates solved (see rule_rank)
 
 
 @dataclass(frozen=True)
@@ -123,6 +131,8 @@ class Evaluation:
     comp_loc_gco2: float | None = None  # marginal location-based compute carbon
     role: str = "grid"  # "grid" (search space) or "control" (equal-budget B3 restarts)
     seeds: tuple[int, ...] = ()
+    queue_wait_s: float = 0.0  # time waited in the DC's queue after the data arrived
+    t_start_units: int | None = None  # compute start (arrival + queue), CWM units
 
     @property
     def ok(self) -> bool:
@@ -173,7 +183,8 @@ class SearchResult:
         if metric == "brown" and eps_scale == 1.0 and self.baselines:
             sel = {"Ours": self.best, **self.baselines}
         else:
-            sel = select(self.problem, self.evaluations, self.deadline_units, self.greenest_dc, metric, eps_scale)
+            sel = select(self.problem, self.evaluations, self.deadline_units, self.greenest_dc, metric, eps_scale,
+                         m_ref=self.m_ref_units)
         return sel
 
     def separable_bound(self, metric: str = "brown", eps_scale: float = 1.0) -> float | None:
@@ -204,7 +215,8 @@ class SearchResult:
         drops = steps = 0
         for dc in {e.dc for e in self.evaluations}:
             g = sorted((e for e in self.evaluations if e.dc == dc and e.ok and e.role == "grid"
-                        and e.scheduler == "cwm"), key=lambda e: e.t_arrival_units)
+                        and e.scheduler == "cwm"),
+                       key=lambda e: e.t_arrival_units if e.t_start_units is None else e.t_start_units)
             c = [e.under(metric).comp_gco2 for e in g]
             for a, b in zip(c, c[1:]):
                 steps += 1
@@ -219,6 +231,31 @@ def transfer_duration_s(problem: Problem, dc: str) -> float:
         return 0.0
     return calculate_transfer_duration(problem.data_size_gb, topo.dc(dc).bandwidth_gbps,
                                        problem.wan.throughput_efficiency, problem.wan.unit_convention)
+
+
+_RUNNERS: dict[tuple[int, str], CWMRunner] = {}
+_RUNNERS_LOCK = threading.Lock()
+
+
+def runner_for(problem: Problem, runner: CWMRunner, dc: str) -> CWMRunner:
+    """The solver runner for DC ``dc``'s hardware: ``runner`` itself unless the DC has its own
+    cluster file, in which case a copy bound to that file (same cache, same binaries)."""
+    path = problem.topology.cluster_json_of(dc)
+    if not path or Path(path).resolve() == Path(runner.cluster_json).resolve():
+        return runner
+    key = (id(runner), str(Path(path).resolve()))
+    with _RUNNERS_LOCK:
+        if key not in _RUNNERS:
+            _RUNNERS[key] = replace(runner, cluster_json=Path(path), _heft_ms_cache={})
+        return _RUNNERS[key]
+
+
+def heft_reference(problem: Problem, runner: CWMRunner) -> tuple[int, dict[str, int]]:
+    """(M_ref, {dc: M_dc}).  The deadline D = alpha * M_ref uses the *source* DC's hardware (the
+    job's home); feasibility at DC d needs D' >= M_dc, the HEFT makespan on d's own hardware."""
+    topo = problem.topology
+    m = {d.name: runner_for(problem, runner, d.name).heft_makespan(problem.dag) for d in topo.dcs}
+    return m[topo.source], m
 
 
 def deadline_units(problem: Problem, m_ref: int) -> int:
@@ -269,20 +306,29 @@ def evaluate(problem: Problem, runner: CWMRunner, dc: str, t_net_s: float, d_uni
         raise ValueError(f"deadline {d_units} units exceeds CI horizon of {topo.hours} h")
     wan = _network(problem, dc, t_net_s)
     tau = wan.transfer_duration_seconds
-    t_arr_units = 0 if dc == topo.source else ts.seconds_to_units_ceil(wan.arrival_time_seconds)
-    d_prime = d_units - t_arr_units
+    arrival_s = 0.0 if dc == topo.source else wan.arrival_time_seconds
+    t_arr_units = 0 if dc == topo.source else ts.seconds_to_units_ceil(arrival_s)
+    # contention: compute starts after the DC's queue wait (0 in the baseline model, so the start
+    # equals the arrival unit exactly as before)
+    wait_s = topo.queue_wait_s(dc, arrival_s)
+    t_start = t_arr_units if wait_s <= 0 else ts.seconds_to_units_ceil(arrival_s + wait_s)
+    d_prime = d_units - t_start
     common = dict(dc=dc, t_net_s=t_net_s, scheduler=scheduler, tau_s=tau,
                   t_arrival_s=wan.arrival_time_seconds, t_arrival_units=t_arr_units,
                   d_prime_units=d_prime, net_kwh=wan.network_energy_kwh, net_gco2=wan.network_emissions_gco2,
-                  role=role, seeds=seeds)
+                  role=role, seeds=seeds, queue_wait_s=wait_s, t_start_units=t_start)
     if d_prime <= 0:
         return Evaluation(status=STATUS_INFEASIBLE, message="no compute time left", **common)
+    if wait_s > 0 and d_prime < runner_for(problem, runner, dc).heft_makespan(problem.dag):
+        # the queue left less time than the DC's HEFT makespan: infeasible by the model's rule
+        return Evaluation(status=STATUS_INFEASIBLE, message="queue leaves less than M_dc", **common)
 
     power, ci = topo.profiles(dc)
-    p = truncate_profile(shift_profile(power, t_arr_units, required_deadline=d_prime), d_prime)
-    c = truncate_profile(shift_profile(ci, t_arr_units, required_deadline=d_prime), d_prime)
+    p = truncate_profile(shift_profile(power, t_start, required_deadline=d_prime), d_prime)
+    c = truncate_profile(shift_profile(ci, t_start, required_deadline=d_prime), d_prime)
 
-    p_idle = topo.cluster.p_idle
+    p_idle = topo.cluster_of(dc).p_idle
+    runner = runner_for(problem, runner, dc)
     iv = p["intervals"]
     brown, gco2, dyn, loc, mk, raw, ms = [], [], [], [], [], [], []
     for seed in seeds:
@@ -301,11 +347,12 @@ def evaluate(problem: Problem, runner: CWMRunner, dc: str, t_net_s: float, d_uni
         raw.append(r.carbon_cost)
         ms.append(r.elapsed_ms)
     n = len(seeds)
-    comp = sum(gco2) / n
-    return Evaluation(status=STATUS_OK, comp_brown_kwh=sum(brown) / n, comp_gco2=comp,
+    pue = topo.dc(dc).pue  # facility overhead: grid energy = PUE x IT energy (1.0 in the baseline model)
+    comp = pue * sum(gco2) / n
+    return Evaluation(status=STATUS_OK, comp_brown_kwh=pue * sum(brown) / n, comp_gco2=comp,
                       total_gco2=wan.network_emissions_gco2 + comp, makespan_units=sum(mk) / n,
                       cwm_raw_watt_units=sum(raw) / n, solver_ms=sum(ms) / n,
-                      comp_dyn_kwh=sum(dyn) / n, comp_loc_gco2=sum(loc) / n, **common)
+                      comp_dyn_kwh=pue * sum(dyn) / n, comp_loc_gco2=pue * sum(loc) / n, **common)
 
 
 def greenest_feasible_dc(problem: Problem, d_units: int, feasible: Iterable[str]) -> str | None:
@@ -331,14 +378,14 @@ def solve(problem: Problem, runner: CWMRunner, workers: int | None = None) -> Se
     the same evaluations (identical seeds and solver calls) — guaranteeing a fair
     comparison and Ours <= B1, B3, B4, B5 by construction.
     """
-    m_ref = runner.heft_makespan(problem.dag)
+    m_ref, m_dc = heft_reference(problem, runner)
     d_units = deadline_units(problem, m_ref)
     topo = problem.topology
 
     jobs: list[tuple[str, float, str]] = []
     feasible = []
     for d in topo.dcs:
-        cands = t_net_candidates(problem, d.name, m_ref, d_units)
+        cands = t_net_candidates(problem, d.name, m_dc[d.name], d_units)
         if cands:
             feasible.append(d.name)
         jobs += [(d.name, t, "cwm") for t in cands]
@@ -362,13 +409,13 @@ def solve(problem: Problem, runner: CWMRunner, workers: int | None = None) -> Se
     with ThreadPoolExecutor(max_workers=workers) as ex:
         evals = list(ex.map(run, jobs))
 
-    sel = select(problem, evals, d_units, green, "brown", 1.0)
+    sel = select(problem, evals, d_units, green, "brown", 1.0, m_ref=m_ref)
     best = sel.pop("Ours")
     return SearchResult(problem, m_ref, d_units, evals, best, sel, green)
 
 
 def select(problem: Problem, evals: Sequence[Evaluation], d_units: int, green: str | None,
-           metric: str = "brown", eps_scale: float = 1.0) -> dict[str, Evaluation | None]:
+           metric: str = "brown", eps_scale: float = 1.0, m_ref: int | None = None) -> dict[str, Evaluation | None]:
     """Derive Ours, B1-B5, A1, A2, C1 from evaluated points under a metric / eps scale."""
     topo = problem.topology
     ev = [e.under(metric, eps_scale) for e in evals]
@@ -381,7 +428,7 @@ def select(problem: Problem, evals: Sequence[Evaluation], d_units: int, green: s
                 return e if e.ok else None
         return None
 
-    out: dict[str, Evaluation | None] = {m: None for m in ("Ours",) + BASELINES + ABLATIONS}
+    out: dict[str, Evaluation | None] = {m: None for m in ("Ours",) + BASELINES + ABLATIONS + RULES}
     out["Ours"] = _min(grid, key=lambda e: (e.total_gco2, e.t_net_s, e.dc))
     out["B1"] = at(topo.source, 0.0)
     if green is not None:
@@ -404,4 +451,58 @@ def select(problem: Problem, evals: Sequence[Evaluation], d_units: int, green: s
     out["B5"] = _min(now, key=lambda e: (e.comp_gco2, topo.dc(e.dc).ci.mean(hours), e.dc))
     # A1: transfer immediately, DC chosen by TOTAL carbon (isolates spatial choice)
     out["A1"] = _min(now, key=lambda e: (e.total_gco2, e.dc))
+    # B6: like B3 but ranks DCs by PUE x mean CI (an operator who knows each site's facility
+    # efficiency); identical to B3 when every PUE is equal
+    cand = sorted({e.dc for e in now if e.ok})
+    if cand:
+        eff = min(cand, key=lambda n: (topo.dc(n).pue * topo.dc(n).ci.mean(hours), n))
+        out["B6"] = at(eff, 0.0)
+    # B7: send now to the greenest DC (mean CI) among those that can still meet the deadline
+    # after their current queue: an operator who checks queues but does not time transfers.
+    # Identical to B3 whenever B3 is feasible and there are no queues.
+    if cand:
+        q_ok = min(cand, key=lambda n: (topo.dc(n).ci.mean(hours), n))
+        out["B7"] = at(q_ok, 0.0)
+    # R1 / R3: theory-guided rule.  Rank every candidate by a solver-free estimate and keep the best
+    # of the top k after solving them (their values are already among the evaluated grid points).
+    ref = next((e for e in ([out["B7"], out["B3"], out["B1"]]) if e is not None and e.ok), None)
+    if ref is not None:
+        ranked = rule_rank(problem, [e for e in grid], d_units, ref, m_ref)
+        for name, k in (("R1", 1), ("R3", 3)):
+            top = [e for e in ranked[:k] if e.ok] + [ref]  # the reference was solved anyway
+            out[name] = _min(top, key=lambda e: (e.total_gco2, e.t_net_s, e.dc))
     return out
+
+
+def rule_rank(problem: Problem, cands: Sequence[Evaluation], d_units: int, ref: Evaluation,
+              m_ref: int | None = None) -> list[Evaluation]:
+    """Order candidates (DC, T_net) by a solver-free estimate of their total carbon.
+
+    Uses only quantities known before scheduling, one reference schedule ``ref`` (the job's
+    energy E, from one solver call) and its minimum duration L = the HEFT makespan M (known: it
+    defines the deadline):
+      - network carbon: exact, from the CI forecast (Prop. 2);
+      - compute carbon: E / PUE_ref x PUE_d x the mean CI of the L cleanest whole hours of DC d
+        in [compute start, D], where start = arrival + queue wait.  This mirrors CWM moving work
+        into green hours, and it is non-decreasing in the start time, as Prop. 1 requires of the
+        optimum.  Candidates whose window is shorter than L are dropped.
+    """
+    topo = problem.topology
+    ts = topo.timescale
+    pue_ref = topo.dc(ref.dc).pue or 1.0
+    e_it = (ref.comp_dyn_kwh or 0.0) / pue_ref
+    # L: the HEFT makespan, not the reference schedule's own length (CWM stretches a schedule to
+    # fill its window, which would make every wait look costlier than it is)
+    dur_units = m_ref if m_ref else (ref.makespan_units or 0.0)
+    dur_h = max(1, math.ceil(ts.units_to_hours(dur_units)))
+    d_h = ts.units_to_hours(d_units)
+    scored = []
+    for e in cands:
+        start_units = e.t_start_units if e.t_start_units is not None else e.t_arrival_units
+        h0 = math.ceil(ts.units_to_hours(start_units) - 1e-9)
+        ci = topo.dc(e.dc).ci.values[h0:int(math.floor(d_h + 1e-9))]
+        if len(ci) < dur_h:
+            continue
+        comp = e_it * topo.dc(e.dc).pue * float(np.mean(sorted(ci)[:dur_h]))
+        scored.append((e.net_gco2 + comp, e.t_net_s, e.dc, e))
+    return [s[-1] for s in sorted(scored, key=lambda s: s[:3])]

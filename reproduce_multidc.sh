@@ -26,6 +26,7 @@ echo "== experiments (CI: $CI)"
 "$PY" -m cwm_multidc.experiments sensitivity --ci-dir "$CI"
 if [ "$MODE" != quick ]; then
   "$PY" -m cwm_multidc.experiments multidate --ci-dir "$CI"
+  "$PY" -m cwm_multidc.experiments multidate-noise --ci-dir "$CI"   # 3 seeds + C1 on the winners
 fi
 
 echo "== figures and tables"
