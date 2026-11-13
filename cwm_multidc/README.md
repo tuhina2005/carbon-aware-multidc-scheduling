@@ -232,6 +232,34 @@ Every summary is also written for ε_net ∈ {0.001, 0.005, 0.02, 0.06} kWh/GB (
 Forecast experiments decide on CI × exp(AR(1) noise) and score the chosen points on the actual CI
 (the CWM schedule itself is recomputed on the actual profile).
 
+## 6a. Extension studies, baselines and the rule
+
+Each study is a subcommand of `cwm_multidc.experiments` (add `--ci-dir cwm_multidc/data/public_ci`),
+writes `<study>_summary.csv` / `<study>_evals.csv` and a Markdown report into its own folder under
+`results/`, and was specified (hypothesis included) before it was run. Summary in
+`finalized_extension.md` §14; decision log in `FINAL_PLAN.md`.
+
+| Subcommand | Folder | Question | Key setting |
+|---|---|---|---|
+| `multidate` | `results/multidate/` | Does the picture hold across seasons and times of day? | Jan/Apr/Jul/Oct × 0/6/12/18 UTC (`--dates all`: 12 months) |
+| `multidate-noise` | `results/multidate/` | Are the ≥ 5 % wins solver luck? | 3 seeds + equal-budget control C1 |
+| `substitution` | `results/substitution/` | H6: is timing worth more without a flat clean grid? | candidate DCs DE/PL/US-CAL, paired with `multidate` |
+| `hetero` | `results/hetero/` | W1: do hardware / PUE differences break CI-only placement? | tiers in `data/clusters/` (efficient / standard / legacy, PUE 1.10 / 1.55 / 2.00) |
+| `contention` | `results/contention/` | W2: do DC queues make joint decisions matter? | diurnal queues, local business hours, ρ ∈ {0, 1, 2} |
+| `sources` | `results/sources/` | W3: does the value of waiting follow the source grid's daily amplitude (Prop. 3)? | data originating in Frankfurt / Warsaw / California |
+
+Baselines added for these studies (all are points of Ours' search space, so Ours ≤ them by
+construction; `tests/test_result_invariants.py` checks this on every saved summary):
+
+- **B6** efficiency-aware greenest DC: lowest PUE × mean CI, send now.
+- **B7** queue-aware greenest DC: greenest DC that still meets the deadline after its queue, send now.
+- **R1 / R3** theory-guided rule (`optimizer.rule_rank`): ranks every (DC, T_net) by exact network
+  carbon + E × PUE × mean CI of the M cleanest hours after compute can start (one reference solver
+  call for E), then solves only the best 1 / 3. ≤ 2 / ≤ 4 solver calls instead of ≈ 64.
+
+`results/fig_ci_variability.png` shows the mechanism behind the results: the cleanest grids
+(Oslo hydro, Paris nuclear) are also the flattest, so once the job moves there, timing barely matters.
+
 ## 7. Automated Tests
 
 ```bash

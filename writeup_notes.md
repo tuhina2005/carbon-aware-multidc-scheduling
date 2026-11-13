@@ -102,11 +102,12 @@ Status: authors, titles and venues below were checked against the arXiv / publis
 | Fig. 5.3 | `results/fig_sensitivity.png` | κ, bandwidth, ε, forecast noise as gain over B3 |
 | Fig. 5.4 | `results/fig_attenuation.png` | Prop. 3: measured vs harmonic attenuation |
 | Fig. 5.5 | `results/fig_pareto.png` | Network vs compute trade-off at one problem |
-| Fig. 5.6 | daily CI swing per region (to draw from `data/public_ci`) | The mechanism: clean grids are flat |
+| Fig. 5.6 | `results/fig_ci_variability.png` | The mechanism: clean grids are flat |
 | Fig. 5.7 | `results/contention/fig_contention.png` | Queues: CI-only placement can miss deadlines; joint gain stays small |
 | Table 5.3 | `results/substitution/substitution.md` | H6: no flat clean grid → 3× gain, paired test |
 | Table 5.4 | `results/hetero/hetero.md` | Hardware/PUE robustness, B6 |
 | Table 5.5 | `results/multidate/multidate.md` (rule + noise sections) | Rule capture; noise control vs C1 |
+| Table 5.6 | `results/sources/sources.md` | W3: value of waiting by data origin (Prop. 3 on real data) |
 | Table 5.1 | `results/multidate/multidate.md` (location table) | Ours vs B1–B5, A1, A2 over the year |
 | Table 5.2 | `results/headline.md` | Headline incl. C1 (equal solver budget) |
 | Appendix | `fig_*_brown.png`, brown tables | Brown metric and why it is secondary |

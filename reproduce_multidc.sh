@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Rebuild the solver and regenerate every result in cwm_multidc/results/ from the real 2024 CI data.
 #
-#   ./reproduce_multidc.sh            # everything (~12-14 h on an 8-core laptop)
-#   ./reproduce_multidc.sh quick      # build + tests + grid/headline/sensitivity + plots (~1.5 h), no multi-date
+#   ./reproduce_multidc.sh            # everything (~8-10 h on an 8-core laptop from an empty cache)
+#   ./reproduce_multidc.sh quick      # build + tests + grid/headline/sensitivity + plots (~1.5 h)
 #
 # Solver results are cached in cwm_multidc/results/cache.jsonl, keyed on the inputs AND the SHA-256
 # of the solver binary, so an interrupted run resumes where it stopped and a rebuilt solver never
@@ -25,8 +25,12 @@ echo "== experiments (CI: $CI)"
 "$PY" -m cwm_multidc.experiments headline --ci-dir "$CI"
 "$PY" -m cwm_multidc.experiments sensitivity --ci-dir "$CI"
 if [ "$MODE" != quick ]; then
-  "$PY" -m cwm_multidc.experiments multidate --ci-dir "$CI"
+  "$PY" -m cwm_multidc.experiments multidate --ci-dir "$CI"         # 4 seasons x 4 start hours
   "$PY" -m cwm_multidc.experiments multidate-noise --ci-dir "$CI"   # 3 seeds + C1 on the winners
+  "$PY" -m cwm_multidc.experiments substitution --ci-dir "$CI"      # H6: no flat clean grid
+  "$PY" -m cwm_multidc.experiments hetero --ci-dir "$CI"            # W1: hardware tiers + PUE
+  "$PY" -m cwm_multidc.experiments contention --ci-dir "$CI"        # W2: diurnal DC queues
+  "$PY" -m cwm_multidc.experiments sources --ci-dir "$CI"           # W3: data origin
 fi
 
 echo "== figures and tables"

@@ -1,15 +1,11 @@
 """Automated unit tests for cwm_multidc.wan_model."""
 
-import math
 import unittest
 from cwm_multidc.wan_model import (
     WANConfig,
-    WANTransferResult,
-    SchedulingObjectiveResult,
     calculate_transfer_duration,
     calculate_arrival_time,
     calculate_network_energy,
-    calculate_network_emissions,
     integrate_piecewise_carbon_intensity,
     evaluate_wan_transfer,
     combine_objectives,

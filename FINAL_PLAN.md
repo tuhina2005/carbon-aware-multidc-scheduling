@@ -105,6 +105,14 @@ call stays valid.
   Report: `results/substitution/substitution.md`.
 - **Rule on held-out studies:** R3 captures 55 % (W1, vs B6), 54–68 % (W2, vs B7), 85 % (H6).
 
+- **Completion pass (13 Nov).** Decisions: W5 (forecast-robust waiting) **dropped**; the existing
+  forecast-noise result (Ours falls below B3 at σ = 0.5) is reported with W5 as future work.
+  W3 built small with predictions fixed before running, from measured 24 h amplitudes (PL 88,
+  US-CAL 75, DE 72 g; 0.15 / 0.33 / 0.20 of mean path CI): H3a absolute waiting saving largest from
+  Warsaw; H3b relative value of waiting California > Frankfurt > Warsaw. W6 theory written
+  (`finalized_extension.md` §3.9). Mechanism figure `results/fig_ci_variability.png`. Reproduction
+  and chunk scripts cover every study; README §6a documents studies, B6/B7 and R1/R3.
+
 ## 4. Schedule
 
 | Day | Daytime (me) | Overnight run |

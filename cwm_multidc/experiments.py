@@ -5,10 +5,12 @@ Usage (from the repository root):
     python -m cwm_multidc.experiments grid         # heatmap grid (sweeps are slices of it)
     python -m cwm_multidc.experiments headline     # Ours vs baselines + ablations + equal-budget control
     python -m cwm_multidc.experiments sensitivity  # time scale kappa, bandwidth, CI forecast error
-    python -m cwm_multidc.experiments multidate --ci-dir DIR   # same problems over 12 dates x 4 start hours
+    python -m cwm_multidc.experiments multidate --ci-dir DIR   # 4 seasonal dates x 4 start hours ('--dates all': 12)
     python -m cwm_multidc.experiments multidate-noise --ci-dir DIR  # 3 seeds + C1 where Ours beats B3 by >= 5 %
     python -m cwm_multidc.experiments hetero --ci-dir DIR  # per-DC hardware scenarios (W1)
     python -m cwm_multidc.experiments contention --ci-dir DIR  # diurnal DC queues (W2)
+    python -m cwm_multidc.experiments substitution --ci-dir DIR  # multidate without a flat clean grid (H6)
+    python -m cwm_multidc.experiments sources --ci-dir DIR  # data originating in Frankfurt / Warsaw / California (W3)
     python -m cwm_multidc.experiments plot         # figures + tables from the CSVs
 
 All solver calls go through a persistent cache (``results/cache.jsonl``), so every
@@ -32,7 +34,6 @@ import json
 import math
 import threading
 import time
-import datetime as dt
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
@@ -207,11 +208,23 @@ def ct_queues(rho: float, dcs=DEFAULT_DCS) -> dict:
             for name, _ in dcs} if rho > 0 else {}
 
 
+# W3: where the data originates.  Prop. 3: the saving from waiting scales with the amplitude of the
+# daily CI cycle on the WAN path, i.e. about half the source grid's amplitude (destinations are the
+# flat clean grids).  Measured 2024 median 24 h amplitudes: PL 88, US-CAL 75, DE 72 gCO2/kWh, i.e.
+# 0.15 / 0.33 / 0.20 of the mean path CI.  Predictions fixed before running:
+#   H3a: absolute carbon saved by waiting (A1 - Ours, kg) is largest from Warsaw;
+#   H3b: relative value of waiting (gain vs A1, %) ranks California > Frankfurt > Warsaw.
+SRC_SOURCES = ("DC_Frankfurt", "DC_Warsaw", "DC_California")
+SRC_DATES_IDX = (0, 6)
+SRC_START_HOURS = (0, 6, 12, 18)
+SRC_ALPHAS = (2.0, 2.5)
+SRC_DIRNAME = "sources"
+
 METRICS = ("brown", "location")
 
 SUMMARY_FIELDS = ["experiment", "dag", "start_hour", "data_size_gb", "alpha", "deadline_units", "m_ref_units",
                   "units_per_hour", "bandwidth_gbps", "forecast_sigma", "forecast_seed", "metric", "eps_kwh_per_gb",
-                  "synthetic_ci", "ci_source", "ci_date", "scenario", "hardware", "contention_rho", "greenest_dc", "method", "dc", "t_net_h", "scheduler", "net_gco2", "comp_gco2",
+                  "synthetic_ci", "ci_source", "ci_date", "scenario", "hardware", "contention_rho", "source_dc", "greenest_dc", "method", "dc", "t_net_h", "scheduler", "net_gco2", "comp_gco2",
                   "total_gco2", "comp_brown_kwh", "comp_dyn_kwh", "d_prime_units", "n_evals", "n_cwm_calls",
                   "separable_bound_gco2", "nonmono_drops", "nonmono_steps"]
 
@@ -275,14 +288,16 @@ class Runner:
         self.lock = threading.Lock()
 
     def topology(self, dag_path: Path, start: int, ts: TimeScale, bandwidth: float = 1.0,
-                 ci: CIConfig | None = None, hardware: dict | None = None, queues: dict | None = None):
+                 ci: CIConfig | None = None, hardware: dict | None = None, queues: dict | None = None,
+                 source: str = "DC_Frankfurt"):
         ci = ci or self.ci
         m = self.cwm.heft_makespan(dag_path)
         alpha_max = max(ALPHAS + HEADLINE_ALPHAS)
         hours = int(math.ceil(alpha_max * m / ts.units_per_hour)) + 2
         return build_topology(hours, DEFAULT_CLUSTER, dcs=ci.dcs, ci_csv=ci.ci_csv,
                               start_hour=ci.offset + start,
-                              timescale=ts, bandwidth_gbps=bandwidth, hardware=hardware, queues=queues)
+                              timescale=ts, bandwidth_gbps=bandwidth, hardware=hardware, queues=queues,
+                              source=source)
 
     def log(self, total: int, msg: str):
         with self.lock:
@@ -531,6 +546,36 @@ def cmd_contention(args) -> None:
         list(ex.map(one, jobs))
 
 
+def cmd_sources(args) -> None:
+    if args.ci_dir is None:
+        raise SystemExit("sources needs real CI: pass --ci-dir")
+    all_dates = third_wednesdays()
+    dates = tuple(args.dates.split(",")) if args.dates else tuple(all_dates[i] for i in SRC_DATES_IDX)
+    cis = {d: CIConfig(args.ci_dir, d) for d in dates}
+    names = {n for n, _ in cis[dates[0]].dcs}
+    sources = tuple(s for s in SRC_SOURCES if s in names)
+    out = _out(args) / SRC_DIRNAME
+    R = Runner("sources", cis[dates[0]], out)
+    (out / "sources.json").write_text(json.dumps(
+        {"dates": list(dates), "start_hours_utc": list(SRC_START_HOURS), "sources": list(sources),
+         "label": cis[dates[0]].label.rsplit("@", 1)[0]}, indent=2) + "\n")
+    jobs = sorted(itertools.product(sources, dates, SRC_START_HOURS, MD_DAGS, MD_SIZES_GB, SRC_ALPHAS),
+                  key=lambda j: (MD_DAGS.index(j[3]), j))
+
+    def one(job):
+        src, date, start, dag, size, alpha = job
+        ci = cis[date]
+        dag_path = DAG_DIR / f"{dag}.dot"
+        topo = R.topology(dag_path, start, TimeScale(), ci=ci, source=src)
+        res = solve(Problem(dag_path, topo, size, alpha=alpha, seeds=(42,), equal_budget_control=False), R.cwm)
+        R.record(res, {"experiment": "sources", "source_dc": src, "start_hour": start, "bandwidth_gbps": 1.0,
+                       "ci_source": ci.label, "ci_date": date})
+        R.log(len(jobs), f"src={src} {date} {dag} start={start} D={size:g}GB a={alpha}: {_fmt(res)}")
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        list(ex.map(one, jobs))
+
+
 def cmd_plot(_args) -> None:
     from . import plots
 
@@ -578,6 +623,9 @@ def main(argv=None) -> None:
     ct.add_argument("--dates", default=None, help="comma-separated UTC dates (default: Jan and Jul third Wednesdays)")
     ct.add_argument("--rhos", default=None, help=f"comma-separated contention levels (default {CT_RHOS})")
     ct.set_defaults(fn=cmd_contention)
+    so = sub.add_parser("sources", parents=[ci_args])
+    so.add_argument("--dates", default=None, help="comma-separated UTC dates (default: Jan and Jul third Wednesdays)")
+    so.set_defaults(fn=cmd_sources)
     sub.add_parser("plot").set_defaults(fn=cmd_plot)
     args = ap.parse_args(argv)
     args.fn(args)

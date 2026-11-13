@@ -834,6 +834,99 @@ def make_substitution(results: Path):
                     json.loads(info_f.read_text()) if info_f.exists() else {})
 
 
+SRC_KEYS = ["source_dc", "ci_date", "dag", "start_hour", "data_size_gb", "alpha"]
+
+
+def sources_md(ss: pd.DataFrame, out: Path, info: dict):
+    """W3: does the value of waiting follow the source grid's daily CI amplitude (Prop. 3)?"""
+    lines = ["# sources: where the data originates (W3)", "",
+             f"> Carbon intensity: {info.get('label', '')} historical hourly data; dates {', '.join(info.get('dates', []))}; "
+             f"start hours {'/'.join(map(str, info.get('start_hours_utc', [])))} UTC; all DCs are candidates. "
+             "Predictions fixed before running (Prop. 3; median 24 h CI amplitude 2024: PL 88, US-CAL 75, DE 72 g, "
+             "i.e. 0.15 / 0.33 / 0.20 of the mean WAN-path CI): **H3a** absolute carbon saved by waiting "
+             "(A1 − Ours) is largest from Warsaw; **H3b** the relative value of waiting (gain vs A1) ranks "
+             "California > Frankfurt > Warsaw.", ""]
+    lines += _solver_warning(out)
+    for metric in ("location", "brown"):
+        d = ss[(ss.metric == metric) & np.isclose(ss.eps_kwh_per_gb, 0.02)]
+        rows = []
+        for src in info.get("sources", sorted(d.source_dc.unique())):
+            ds = d[d.source_dc == src]
+            piv = ds.pivot_table(index=SRC_KEYS, columns="method", values="total_gco2", aggfunc="first")
+            o = ds[ds.method == "Ours"].set_index(SRC_KEYS)
+            rows.append({"source": src.replace("DC_", ""), "n": len(piv),
+                         "value of waiting vs A1 mean %": 100 * _gain(piv, "A1").mean(),
+                         "saved by waiting (A1 − Ours) kg mean": ((piv.A1 - piv.Ours) / 1e3).mean(),
+                         "Ours vs B3 mean %": 100 * _gain(piv, "B3").mean(),
+                         "Ours vs B1 (local) mean %": 100 * _gain(piv, "B1").mean(),
+                         "Ours waits": (o.t_net_h > 0).mean(),
+                         "R3 vs B3 mean %": 100 * _gain(piv[["R3", "B3"]].rename(columns={"R3": "Ours"}), "B3").mean()
+                         if "R3" in piv else np.nan,
+                         "Ours DCs": ", ".join(f"{DC_SHORT.get(k, k)} {n}" for k, n in o.dc.value_counts().items())})
+        if rows:
+            lines += [f"## {metric} metric, ε = 0.02 kWh/GB", "", pd.DataFrame(rows).round(3).to_markdown(index=False), ""]
+    (out / "sources.md").write_text("\n".join(lines))
+
+
+def make_sources(results: Path):
+    f = results / "sources" / "sources_summary.csv"
+    if not f.exists():
+        return
+    info_f = results / "sources" / "sources.json"
+    sources_md(pd.read_csv(f), results / "sources", json.loads(info_f.read_text()) if info_f.exists() else {})
+
+
+def fig_ci_variability(results: Path, day: str = "2024-04-17"):
+    """The mechanism: the cleanest grids are also the flattest (left), shown on one day (right)."""
+    from .data_loader import load_electricitymaps_csv
+
+    f = results / "ci_source.json"
+    if not f.exists():
+        return
+    info = json.loads(f.read_text())
+    files = info.get("files") or {}
+    if not files:
+        return  # synthetic run: no real series to show
+    name_of = {r: n for n, r in info.get("dcs", [])}
+    stats, day_curves = [], {}
+    for region, path in files.items():
+        s = load_electricitymaps_csv(path, region)
+        v = np.asarray(s.values)
+        d = v[: len(v) // 24 * 24].reshape(-1, 24)
+        stats.append((region, v.mean(), float(np.median(d.max(1) - d.min(1)))))
+        from .data_loader import hours_from_series_start
+        h0 = hours_from_series_start(path, day)
+        day_curves[region] = v[h0:h0 + 24]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
+    ax = axes[0]
+    for region, mean, swing in stats:
+        dc = name_of.get(region, region)
+        ax.scatter([mean], [swing], s=70, color=DC_COLOR.get(dc, TEXT2), marker=DC_MARK.get(dc, "o"),
+                   edgecolor=SURFACE, linewidth=1.5, zorder=3)
+        # the two clean grids sit almost on top of each other: label one above, one below
+        off = {"NO": (8, -12), "FR": (8, 6)}.get(region, (8, 4))
+        ax.annotate(f"{dc.replace('DC_', '')} ({region})", (mean, swing), xytext=off, textcoords="offset points",
+                    fontsize=8, color=TEXT)
+    ax.set_xlabel("Mean carbon intensity 2024 (gCO$_2$/kWh)")
+    ax.set_ylabel("Median daily swing, max − min (gCO$_2$/kWh)")
+    ax.set_title("Clean grids are flat: little to gain from timing there", fontsize=9)
+    ax.set_xlim(0, max(m for _, m, _ in stats) * 1.3)
+    ax.set_ylim(bottom=-10)
+    ax = axes[1]
+    for region, curve in day_curves.items():
+        dc = name_of.get(region, region)
+        ax.plot(range(len(curve)), curve, color=DC_COLOR.get(dc, TEXT2), lw=2, label=dc.replace("DC_", ""))
+    ax.set_xlabel(f"Hour of {day} (UTC)")
+    ax.set_ylabel("Carbon intensity (gCO$_2$/kWh)")
+    ax.set_title("One day of hourly carbon intensity", fontsize=9)
+    ax.set_ylim(bottom=0)
+    ax.legend(fontsize=7, ncol=1, loc="center right")
+    _footer(fig, info.get("label", "synthetic"))
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    fig.savefig(results / "fig_ci_variability.png", dpi=180)
+    plt.close(fig)
+
+
 def make_multidate(md_dir: Path):
     f = md_dir / "multidate_summary.csv"
     if not f.exists():
@@ -874,4 +967,6 @@ def make_all(results: Path):
     make_hetero(results / "hetero")
     make_contention(results / "contention")
     make_substitution(results)
+    make_sources(results)
+    fig_ci_variability(results)
     print(f"figures/tables written to {results}")

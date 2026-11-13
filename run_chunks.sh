@@ -5,7 +5,8 @@
 #   ./run_chunks.sh 2      multi-date, Jan + Apr                                  (~1.5 h)
 #   ./run_chunks.sh 3      multi-date, Jul + Oct                                  (~1.5 h)
 #   ./run_chunks.sh w1     W1 heterogeneous-DC study -> results/hetero/           (~1 h)
-#   ./run_chunks.sh w2     W2 contention study (DC queues) -> results/contention/ (~2-3 h)
+#   ./run_chunks.sh w2     W2 contention study (DC queues) -> results/contention/ (~1 h)
+#   ./run_chunks.sh w3     W3 data-origin study + H6 substitution study           (~1.5 h)
 #   ./run_chunks.sh 5      rebuild results/ from the cache, noise control, plots, comparison (~1.5 h)
 #   ./run_chunks.sh status which sessions have finished
 #
@@ -79,8 +80,13 @@ case "${1:-}" in
     run w2 contention "${EXP[@]}" contention --ci-dir "$CI"
     "$PY" -c "from pathlib import Path; from cwm_multidc.plots import _style, make_contention; _style(); make_contention(Path('cwm_multidc/results/contention'))"
     finish w2 ;;
+  w3)
+    run w3 sources "${EXP[@]}" sources --ci-dir "$CI"
+    run w3 substitution "${EXP[@]}" substitution --ci-dir "$CI"
+    "${EXP[@]}" plot > "$LOGS/w3_plot.log" 2>&1
+    finish w3 ;;
   status)
-    for s in 1 2 3 w1 w2 5; do
+    for s in 1 2 3 w1 w2 w3 5; do
       if [ -f "$SCRATCH/session$s.done" ]; then echo "session $s: done $(cat "$SCRATCH/session$s.done")"
       else echo "session $s: not done"; fi
     done

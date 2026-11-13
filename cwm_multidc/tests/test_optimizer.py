@@ -1,6 +1,5 @@
 """Tests for cwm_multidc.optimizer: grid construction, carbon arithmetic, baselines, E2E."""
 
-import math
 import unittest
 from pathlib import Path
 
