@@ -260,6 +260,11 @@ construction; `tests/test_result_invariants.py` checks this on every saved summa
 `results/fig_ci_variability.png` shows the mechanism behind the results: the cleanest grids
 (Oslo hydro, Paris nuclear) are also the flattest, so once the job moves there, timing barely matters.
 
+**Solver output.** `solve_cwm` writes progress lines prefixed `[DEBUG]` to stderr; the runner
+ignores them. They are left in on purpose: the solver cache and every results folder are keyed on
+the exact binary (SHA-256 in `ci_source.json`), so changing the C++ code, even to remove log lines,
+would invalidate all cached results and require a full re-run.
+
 ## 7. Automated Tests
 
 ```bash

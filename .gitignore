@@ -62,3 +62,6 @@ cwm_multidc/results/pre_fix_solver/
 
 # run_chunks.sh scratch output (only the shared solver cache matters)
 cwm_multidc/results/_chunks/
+
+# report build dependencies
+report/node_modules/

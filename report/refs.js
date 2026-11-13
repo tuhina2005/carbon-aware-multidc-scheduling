@@ -1,0 +1,21 @@
+// IEEE-style reference entries (inline markup allowed). Numbered by order of first citation.
+module.exports = {
+  cwm: 'D. Schweisgut, A. Benoit, Y. Robert, and H. Meyerhenke, "Carbon-aware mapping and scheduling for deadline-constrained workflows," *arXiv preprint* arXiv:2605.27652, 2026.',
+  cawosched: 'D. Schweisgut, A. Benoit, Y. Robert, and H. Meyerhenke, "Carbon-aware workflow scheduling with fixed mapping and deadline constraint," in *Proc. 54th Int. Conf. Parallel Processing (ICPP)*, 2025. arXiv:2507.08725.',
+  heft: 'H. Topcuoglu, S. Hariri, and M.-Y. Wu, "Performance-effective and low-complexity task scheduling for heterogeneous computing," *IEEE Trans. Parallel Distrib. Syst.*, vol. 13, no. 3, pp. 260–274, 2002.',
+  waitawhile: 'P. Wiesner, I. Behnke, D. Scheinert, K. Gontarska, and L. Thamsen, "Let\'s wait awhile: How temporal workload shifting can reduce carbon emissions in the cloud," in *Proc. 22nd Int. Middleware Conf.*, 2021, doi: 10.1145/3464298.3493399.',
+  carbonscaler: 'W. A. Hanafy, Q. Liang, N. Bashir, D. Irwin, and P. Shenoy, "CarbonScaler: Leveraging cloud workload elasticity for optimizing carbon-efficiency," *Proc. ACM Meas. Anal. Comput. Syst.*, vol. 7, no. 3, art. 57, Dec. 2023, doi: 10.1145/3626788.',
+  cics: 'A. Radovanović *et al.*, "Carbon-aware computing for datacenters," *arXiv preprint* arXiv:2106.11750, 2021.',
+  casper: 'A. Souza, S. Jasoria, B. Chakrabarty, A. Bridgwater, A. Lundberg, F. Skogh, A. Ali-Eldin, D. Irwin, and P. Shenoy, "CASPER: Carbon-aware scheduling and provisioning for distributed web services," in *Proc. 14th Int. Green and Sustainable Computing Conf. (IGSC)*, 2023, pp. 67–73, doi: 10.1145/3634769.3634812.',
+  k8s: 'M. Zanotto, L. Vicentini, R. Vreto, F. Lumpp, D. Braga, and S. Fiore, "A user-centric Kubernetes-based architecture for green cloud computing," *arXiv preprint* arXiv:2509.13325, 2025.',
+  lints: 'E. Rodrigues, J. Goldverg, and T. Kosar, "Carbon-aware temporal data transfer scheduling across cloud datacenters," *arXiv preprint* arXiv:2506.04117, 2025.',
+  e2e: 'J. Goldverg, H. Jamil, E. Rodriguez, and T. Kosar, "Carbon-aware end-to-end data movement," *arXiv preprint* arXiv:2406.09650, 2024.',
+  aslan: 'J. Aslan, K. Mayers, J. G. Koomey, and C. France, "Electricity intensity of internet data transmission: Untangling the estimates," *J. Ind. Ecol.*, vol. 22, no. 4, pp. 785–798, 2018.',
+  wfcommons: 'T. Coleman, H. Casanova, L. Pottier, M. Kaushik, E. Deelman, and R. Ferreira da Silva, "WfCommons: A framework for enabling scientific workflow research and development," *Future Gener. Comput. Syst.*, vol. 128, pp. 16–27, 2022.',
+  energycharts: 'Fraunhofer ISE, "Energy-Charts: Public net electricity generation," 2024 data. [Online]. Available: https://www.energy-charts.info. [Accessed: 13-Nov-2026].',
+  caiso: 'California ISO, "Today\'s Outlook: Supply trend (fuel source history)," 2024 data. [Online]. Available: https://www.caiso.com/todays-outlook/supply. [Accessed: 13-Nov-2026].',
+  ipcc: 'S. Schlömer *et al.*, "Annex III: Technology-specific cost and performance parameters," in *Climate Change 2014: Mitigation of Climate Change. Contribution of Working Group III to the Fifth Assessment Report of the IPCC*. Cambridge, U.K.: Cambridge Univ. Press, 2014.',
+  google_pue: 'Google, "2024 Environmental Report," 2024. [Online]. Available: https://sustainability.google/reports/. [Accessed: 13-Nov-2026].',
+  uptime: 'Uptime Institute, "Global Data Center Survey 2024," 2024. [Online]. Available: https://uptimeinstitute.com/resources/research-and-reports. [Accessed: 13-Nov-2026].',
+  asan: 'K. Serebryany, D. Bruening, A. Potapenko, and D. Vyukov, "AddressSanitizer: A fast address sanity checker," in *Proc. USENIX Annual Technical Conf. (ATC)*, 2012, pp. 309–318.',
+};

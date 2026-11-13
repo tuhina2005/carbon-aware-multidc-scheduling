@@ -103,7 +103,7 @@ call stays valid.
   0.07 → 0.96 kg; paired sign test 96/139, p = 8·10⁻⁶. Holds at ε = 0.001 (1.1 % → 5.0 %,
   p = 1·10⁻⁸), so it does not rely on the network accounting. Rule R3 captures 85 % there.
   Report: `results/substitution/substitution.md`.
-- **Rule on held-out studies:** R3 captures 55 % (W1, vs B6), 54–68 % (W2, vs B7), 85 % (H6).
+- **Rule on held-out studies:** R3 captures 55 % (W1, vs B6), 54–84 % (W2, vs B7), 85 % (H6).
 
 - **Completion pass (13 Nov).** Decisions: W5 (forecast-robust waiting) **dropped**; the existing
   forecast-noise result (Ours falls below B3 at σ = 0.5) is reported with W5 as future work.
