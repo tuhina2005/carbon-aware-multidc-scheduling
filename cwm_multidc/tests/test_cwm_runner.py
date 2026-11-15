@@ -160,5 +160,25 @@ class TestDeterminism(unittest.TestCase):
         self.assertEqual(next(iter(results))[2], 6222)
 
 
+class TestCacheFailures(unittest.TestCase):
+    """Regression: an interrupted run once cached solver crashes (status "error") as if they were real."""
+
+    def test_failures_neither_persisted_nor_reused(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "cache.jsonl"
+            c = ResultCache(path)
+            c.put("bad", CWMResult("error", "cwm", 10, message=""))
+            c.put("slow", CWMResult("timeout", "cwm", 10))
+            c.put("good", CWMResult(STATUS_INFEASIBLE, "cwm", 10))
+            self.assertIsNone(c.get("bad"))
+            # an old cache file that already contains a failure must not resurrect it
+            with open(path, "a") as f:
+                f.write(json.dumps({"key": "old", "result": CWMResult("error", "cwm", 10).to_json()}) + "\n")
+            reloaded = ResultCache(path)
+            self.assertIsNone(reloaded.get("old"))
+            self.assertIsNone(reloaded.get("bad"))
+            self.assertEqual(reloaded.get("good").status, STATUS_INFEASIBLE)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -150,17 +150,22 @@ class ResultCache:
                         continue
                     try:
                         rec = json.loads(line)
-                        self._mem[rec["key"]] = CWMResult.from_json(rec["result"])
+                        res = CWMResult.from_json(rec["result"])
                     except (json.JSONDecodeError, KeyError, TypeError):
                         continue  # tolerate a torn last line
+                    if res.status in (STATUS_ERROR, STATUS_TIMEOUT):
+                        continue  # never reuse a failed run (older caches may hold some)
+                    self._mem[rec["key"]] = res
 
     def get(self, key: str) -> CWMResult | None:
         with self._lock:
             return self._mem.get(key)
 
     def put(self, key: str, result: CWMResult) -> None:
-        # timeouts depend on machine load; do not persist them
-        if result.status == STATUS_TIMEOUT:
+        # Failures are not properties of the input: timeouts depend on machine load, and an "error" can
+        # be a solver killed by a signal (e.g. Ctrl-C while a run was interrupted).  Never persist them,
+        # otherwise an interrupted run leaves permanent false failures that later runs silently reuse.
+        if result.status in (STATUS_TIMEOUT, STATUS_ERROR):
             return
         with self._lock:
             self._mem[key] = result

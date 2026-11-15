@@ -99,8 +99,8 @@ call stays valid.
   This single fact explains the 2 % baseline gain, the W1 robustness and the W2 null.
 - **H6 (fixed before running): supported.** Same 192 multi-date problems, candidate DCs restricted
   to Frankfurt/Warsaw/California (no flat clean grid). Location metric, ε = 0.02: Ours vs B3
-  1.8 % → **5.3 %**, share ≥ 5 % 11 % → 24 %, value of waiting 1.6 % → 3.8 %, saving per job
-  0.07 → 0.96 kg; paired sign test 96/139, p = 8·10⁻⁶. Holds at ε = 0.001 (1.1 % → 5.0 %,
+  1.8 % → **5.3 %**, share ≥ 5 % 11 % → 24 %, value of waiting 1.6 % → 3.6 %, saving per job
+  0.07 → 0.95 kg; paired sign test 96/139, p = 8·10⁻⁶. Holds at ε = 0.001 (1.1 % → 5.0 %,
   p = 1·10⁻⁸), so it does not rely on the network accounting. Rule R3 captures 85 % there.
   Report: `results/substitution/substitution.md`.
 - **Rule on held-out studies:** R3 captures 55 % (W1, vs B6), 54–84 % (W2, vs B7), 85 % (H6).

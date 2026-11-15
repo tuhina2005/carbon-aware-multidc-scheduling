@@ -72,7 +72,7 @@ function ch1() {
     H2("1.3", "Contributions"),
     ...bullets([
       "**Model and theory.** A formulation of joint DC selection, transfer timing and DAG scheduling under a shared deadline, with proofs that compute carbon is monotone in the arrival time (Prop. 1), that network carbon has an exact finite candidate set (Prop. 2, Cor. 2a), and that the value of waiting decays with transfer duration (Prop. 3); extensions to heterogeneous hardware and DC queues (Chapter 3).",
-      "**Implementation.** A Python system around the CWM C++ solver that shifts and truncates power profiles, evaluates every candidate exactly, and reports two carbon metrics, seven baselines, two ablations and an equal-solver-budget control; resumable, cached and covered by 114 automated tests (Chapter 4).",
+      "**Implementation.** A Python system around the CWM C++ solver that shifts and truncates power profiles, evaluates every candidate exactly, and reports two carbon metrics, seven baselines, two ablations and an equal-solver-budget control; resumable, cached and covered by 118 automated tests (Chapter 4).",
       "**A solver bug fix.** AddressSanitizer [cite:asan] located a heap buffer over-read in the CWM mapper that made its output depend on uninitialised memory; we fixed it and showed that no reported result changed (Section 4.5).",
       "**Findings.** On real 2024 data the cleanest grids are also the flattest, so location and timing are substitutes: joint optimisation adds little when a flat clean grid is reachable, robustly so, and triples its gain when none is (Chapter 6).",
       "**A theory-guided rule** that ranks candidates without the solver and captures 76–85 % of the joint optimiser's gain with at most four solver calls (Sections 4.4 and 6.9).",
