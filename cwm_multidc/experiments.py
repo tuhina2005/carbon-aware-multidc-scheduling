@@ -95,8 +95,15 @@ class CIConfig:
                 **provenance()}
         (results / CI_SOURCE_FILE).write_text(json.dumps(info, indent=2) + "\n")
 
+# Paths that are outputs or documents, not code: changes there do not make the code "dirty".  Without
+# this, every study after the first saw the previous study's freshly written (tracked) results files
+# and recorded git_dirty = true.
+_PROVENANCE_IGNORE = ("cwm_multidc/results", "report")
+
+
 def provenance() -> dict:
-    """Which code produced a results folder: solver build and git commit (dirty if uncommitted)."""
+    """Which code produced a results folder: solver build and git commit (dirty if code is uncommitted;
+    results and report files are ignored)."""
     import subprocess
     from .cwm_runner import DEPLOY_DIR, file_sha256
 
@@ -108,7 +115,8 @@ def provenance() -> dict:
     solver = DEPLOY_DIR / "solve_cwm"
     return {"solver_sha256": file_sha256(solver) if solver.exists() else None,
             "git_commit": git("rev-parse", "HEAD") or None,
-            "git_dirty": bool(git("status", "--porcelain", "--untracked-files=no"))}
+            "git_dirty": bool(git("status", "--porcelain", "--untracked-files=no", "--", ".",
+                                  *(f":(exclude){p}" for p in _PROVENANCE_IGNORE)))}
 
 
 GRID_DAGS = ("atacseq200", "eager1000")
