@@ -24,6 +24,6 @@
     "US-CAL": "cwm_multidc/data/public_ci/US-CAL.csv"
   },
   "solver_sha256": "8a456bbb33a02318401165011482fb5cdf8146673c163dac206ce5224d91a32a",
-  "git_commit": "b43b6cda73415d93a27f19e622b725e0c0ac0293",
-  "git_dirty": true
+  "git_commit": "bc51d300e2f6e3f6336fe77f6ae3937a5fed5f69",
+  "git_dirty": false
 }
