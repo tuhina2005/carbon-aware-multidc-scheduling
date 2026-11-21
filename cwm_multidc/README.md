@@ -248,6 +248,14 @@ writes `<study>_summary.csv` / `<study>_evals.csv` and a Markdown report into it
 | `contention` | `results/contention/` | W2: do DC queues make joint decisions matter? | diurnal queues, local business hours, ρ ∈ {0, 1, 2} |
 | `sources` | `results/sources/` | W3: does the value of waiting follow the source grid's daily amplitude (Prop. 3)? | data originating in Frankfurt / Warsaw / California |
 
+Two analyses re-score the saved results without solver calls (run after the studies above; both are
+in `reproduce_multidc.sh`):
+
+| Command | Folder | Question |
+|---|---|---|
+| `python -m cwm_multidc.waiting_cost` | `results/waiting/` | Does waiting still pay when holding the job (storage, or reserved servers) costs power? Sweeps holding power 0–16.9 kW over `multidate`, `substitution`, `contention`. |
+| `python -m cwm_multidc.tradeoffs` | `results/tradeoffs/` | Carbon against the deadline (CWM fills its window, so completion time = D), and results by workflow type. |
+
 Baselines added for these studies (all are points of Ours' search space, so Ours ≤ them by
 construction; `tests/test_result_invariants.py` checks this on every saved summary):
 

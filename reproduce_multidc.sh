@@ -35,4 +35,8 @@ fi
 
 echo "== figures and tables"
 "$PY" -m cwm_multidc.experiments plot
+if [ "$MODE" != quick ]; then
+  "$PY" -m cwm_multidc.waiting_cost   # cost of waiting/queuing (re-scores saved results, no solver calls)
+  "$PY" -m cwm_multidc.tradeoffs      # carbon vs deadline, results by workflow (from saved summaries)
+fi
 echo "done: cwm_multidc/results/ (provenance in ci_source.json)"

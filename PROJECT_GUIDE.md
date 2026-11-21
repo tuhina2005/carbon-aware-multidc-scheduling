@@ -135,6 +135,9 @@ which describes most of the world.
 | W4 cheap rule | Solving only 3–4 options instead of about 64 recovers 54–85 % of the full method's gain. |
 | Upper bound | We proved that *no* strategy of this kind can beat B3 by more than about 3 % year-round on these grids. Ours reaches 58–99 % of that ceiling. |
 | Pre-emptive transfer | Pausing and resuming transfers adds only about +0.1 %. Not worth the complexity. |
+| Cost of waiting | Charging power for holding the data while it waits barely matters: at 10 W (storing 1 TB) the value of waiting drops from 1.57 % to 1.43 %; it disappears only near 1 kW, i.e. if servers were kept reserved. |
+| Deadline trade-off | Jobs finish at their deadline, so the trade-off is carbon vs deadline. Staying in Frankfurt saves up to 1.5 kg per extra hour of deadline; a clean DC at most 0.17 kg. For short jobs only Ours turns extra time into savings. |
+| Workflow types | CWM beats HEFT by ~19–20 % on the 1000-task workflows but only 0.7 % on atacseq200; the joint gain is larger for atacseq200 (2.8–3.1 %) than eager1000 (0.3–0.9 %). |
 
 ### 4.4 One-paragraph summary
 
@@ -190,12 +193,14 @@ submission/
 │   ├── optimizer.py          the joint search ("Ours"), baselines B1–B7, A1/A2/C1, rule R1/R3
 │   ├── experiments.py        every study as a subcommand (grid, headline, multidate, hetero, ...)
 │   ├── plots.py              turns result CSVs into the markdown tables and figures
+│   ├── waiting_cost.py       cost of waiting/queuing: re-scores saved results with a holding power
+│   ├── tradeoffs.py          carbon vs deadline, and results by workflow type
 │   ├── scripts/
 │   │   ├── fetch_public_ci.py      downloads and builds the 2024 CI data
 │   │   ├── fetch_ci_data.py        optional Electricity Maps fetcher
 │   │   ├── compare_results.py      compares results before and after the solver fix
 │   │   └── preemptive_transfer.py  the pause-and-resume transfer analysis
-│   ├── tests/                118 automated tests (models, optimiser, cache, invariants on results)
+│   ├── tests/                129 automated tests (models, optimiser, cache, invariants on results)
 │   ├── data/                 see Section 5
 │   └── results/              see Section 7
 │
@@ -247,6 +252,8 @@ per method per problem), `*_summary.csv` (gains), `*.md` (readable tables) and `
 | `hetero/` | W1: mixed hardware and PUE |
 | `contention/` | W2: queues at busy data centres |
 | `sources/` | W3: data starting in Frankfurt, Warsaw or California |
+| `waiting/` | cost of waiting and queuing (holding power sweep) |
+| `tradeoffs/` | carbon vs deadline; results by workflow type |
 | `synthetic/` | early development runs on made-up CI data; **not** used for conclusions |
 | `fig_ci_variability.png` | the daily CI swing of each grid (the mechanism figure) |
 | `pre_vs_post_fix.md` | proof that fixing the solver bug did not change the conclusions |

@@ -65,6 +65,11 @@ case "${1:-}" in
     run 5 final_multidate "${EXP[@]}" multidate --ci-dir "$CI"
     run 5 final_noise "${EXP[@]}" multidate-noise --ci-dir "$CI"
     run 5 final_plot "${EXP[@]}" plot
+    if [ -f cwm_multidc/results/substitution/substitution_summary.csv ] && \
+       [ -f cwm_multidc/results/contention/contention_summary.csv ]; then  # needs w2 and w3 first
+      run 5 waiting_cost "$PY" -m cwm_multidc.waiting_cost
+    fi
+    run 5 tradeoffs "$PY" -m cwm_multidc.tradeoffs
     if [ -d cwm_multidc/results/pre_fix_solver ]; then
       "$PY" -m cwm_multidc.scripts.compare_results cwm_multidc/results/pre_fix_solver cwm_multidc/results \
         --out cwm_multidc/results/pre_vs_post_fix.md > /dev/null
