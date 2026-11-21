@@ -8,6 +8,7 @@ venv/
 
 # macOS & IDEs
 .DS_Store
+~$*
 .vscode/
 .idea/
 

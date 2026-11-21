@@ -159,13 +159,13 @@ print(f"Total Emissions:   {obj.total_emissions_gco2:.2f} gCO2")
 | CWM time unit | 30 units = 1 h (120 s/unit); one interval per hourly CI sample | `TimeScale` |
 | Clock | t = 0 at submission, aligned to a UTC hour, shared by all DCs | `Topology` |
 | Budget | `G = P_idle + max(0, 1 − CI/800)·f·P_dyn`, f = 0.2 small / 0.4 large, same for every DC | `BudgetMapping` |
-| Compute carbon (brown, primary) | Σ_j kWh(E_j^excess)·CI_{d,j}, per-interval excess from `solve_cwm --per-interval` | `optimizer.evaluate` |
-| Compute carbon (location, secondary) | Σ_j kWh(E_j^total − P_idle·|I_j|)·CI_{d,j} (marginal, idle-free) | `optimizer.evaluate` |
+| Compute carbon (location, primary) | Σ_j kWh(E_j^total − P_idle·|I_j|)·CI_{d,j} (marginal, idle-free) | `optimizer.evaluate` |
+| Compute carbon (brown, secondary; CWM's own objective) | Σ_j kWh(E_j^excess)·CI_{d,j}, per-interval excess from `solve_cwm --per-interval` | `optimizer.evaluate` |
 | Network carbon | Δ·ε_net·mean over [T_net, T_net+τ) of (CI_src + CI_d)/2 | `wan_model` |
 | Arrival | T_arr = ceil(units(T_net + τ)); D' = D − T_arr; profile shifted by T_arr and truncated to D' | `optimizer.evaluate` |
 | Deadline | D = ceil(α·M), M = HEFT makespan (as in the CWM paper); candidates with D' < M skipped | `optimizer` |
 | T_net grid | {0, T_max} ∪ {k·h} ∪ {k·h − τ}: contains the exact network-carbon optimum | `t_net_candidates` |
-| Topology | source DC_Frankfurt (DE); NO, FR, PL, US-CAL, IN; same `small` cluster everywhere; 1 Gbps | `build_topology` |
+| Topology | source DC_Frankfurt (DE); NO, FR, PL, US-CAL (IN/Mumbai only with synthetic CI: no free hourly data, so it is absent from `data/public_ci/` and every real-data result); same `small` cluster everywhere; 1 Gbps | `build_topology` |
 
 Baselines (all but B2 are points of the joint search space, evaluated with the same solver calls):
 
@@ -201,16 +201,16 @@ and every figure and table states the source in its footer.
 
 ## 6. Running experiments
 
-**One command:** `./reproduce_multidc.sh` (build, tests, every experiment, plots; ~12–14 h) or
-`./reproduce_multidc.sh quick` (~1.5 h, skips the multi-date study). To split the full run into
-sessions of at most ~3 h that can be stopped and restarted safely, use `./run_chunks.sh 1` … `5`
-(`./run_chunks.sh status` shows progress). Individual steps:
+**One command:** `./reproduce_multidc.sh` (build, tests, every experiment, plots; ~8–10 h on an 8-core laptop from an empty cache) or
+`./reproduce_multidc.sh quick` (~1.5 h, skips the multi-date and W1–W3 studies). To split the full run into
+sessions of about 1–1.5 h that can be stopped and restarted safely, use
+`./run_chunks.sh 1 | 2 | 3 | w1 | w2 | w3 | 5` (`./run_chunks.sh status` shows progress). Individual steps:
 
 ```bash
 python -m cwm_multidc.experiments grid       # 2 DAGs x 5 data sizes x 7 deadlines (sweeps are slices)
 python -m cwm_multidc.experiments headline   # 4 DAGs x 2 start hours x 2 deadlines, 3 seeds, + C1 control
 python -m cwm_multidc.experiments sensitivity # kappa {60,120,240 s}, bandwidth {0.5..10 Gbps}, forecast error
-python -m cwm_multidc.experiments multidate --ci-dir DIR  # 12 dates x 4 start hours (real CI only)
+python -m cwm_multidc.experiments multidate --ci-dir DIR  # 4 seasonal dates x 4 start hours (real CI only; --dates all: 12)
 python -m cwm_multidc.experiments multidate-noise --ci-dir DIR  # 3 seeds + C1 where Ours beats B3 by >= 5 %
 python -m cwm_multidc.experiments plot       # results/fig_*.png, results/*.md, results/multidate/
 ```

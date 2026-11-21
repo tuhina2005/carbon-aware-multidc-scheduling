@@ -1,6 +1,14 @@
 # Artifact for the paper: Carbon-Aware Mapping and Scheduling for Deadline-Constrained Workflows
 
-For an overview of this artifact, have a look at `overview_document.pdf`.
+This repository contains the original CWM artifact (`code_cwm/`, `code_cawosched/`) and our
+multi-data-centre extension (`cwm_multidc/`).
+
+- `PROJECT_GUIDE.md`: plain-language overview of the extension, results and repository layout.
+- `cwm_multidc/README.md`: how to run the extension (model decisions in §5, experiments in §6, studies in §6a).
+- `finalized_extension.md`: full technical design, theory and threats to validity.
+- `report/CSD493_Final_Report.pdf`: the final report.
+- `setup.sh`, `check.sh`, `reproduce.sh`: build and reproduce the original CWM paper's experiments;
+  `reproduce_multidc.sh` and `run_chunks.sh` reproduce the extension's results.
 
 ## Licenses
 

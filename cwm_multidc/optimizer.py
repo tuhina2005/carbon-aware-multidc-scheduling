@@ -179,7 +179,7 @@ class SearchResult:
         return out
 
     def summary(self, metric: str = "brown", eps_scale: float = 1.0) -> dict[str, Evaluation | None]:
-        """Ours, B1-B5, ablations A1/A2 and control C1 under ``metric`` / rescaled eps."""
+        """Ours, B1-B7, ablations A1/A2, control C1 and rules R1/R3 under ``metric`` / rescaled eps."""
         if metric == "brown" and eps_scale == 1.0 and self.baselines:
             sel = {"Ours": self.best, **self.baselines}
         else:
@@ -372,11 +372,11 @@ def _min(evals: Sequence[Evaluation], key) -> Evaluation | None:
 
 # ------------------------------------------------------------------------ driver
 def solve(problem: Problem, runner: CWMRunner, workers: int | None = None) -> SearchResult:
-    """Joint grid search + baselines B1-B5 for one problem.
+    """Joint grid search + baselines B1-B7, ablations, control and rules for one problem.
 
     All baselines except B2 are points of the joint search space, so they are read off
     the same evaluations (identical seeds and solver calls) — guaranteeing a fair
-    comparison and Ours <= B1, B3, B4, B5 by construction.
+    comparison and Ours <= B1, B3-B7, A1, A2, R1, R3 by construction.
     """
     m_ref, m_dc = heft_reference(problem, runner)
     d_units = deadline_units(problem, m_ref)
@@ -416,7 +416,7 @@ def solve(problem: Problem, runner: CWMRunner, workers: int | None = None) -> Se
 
 def select(problem: Problem, evals: Sequence[Evaluation], d_units: int, green: str | None,
            metric: str = "brown", eps_scale: float = 1.0, m_ref: int | None = None) -> dict[str, Evaluation | None]:
-    """Derive Ours, B1-B5, A1, A2, C1 from evaluated points under a metric / eps scale."""
+    """Derive Ours, B1-B7, A1, A2, C1, R1, R3 from evaluated points under a metric / eps scale."""
     topo = problem.topology
     ev = [e.under(metric, eps_scale) for e in evals]
     grid = [e for e in ev if e.scheduler == "cwm" and e.role == "grid"]
