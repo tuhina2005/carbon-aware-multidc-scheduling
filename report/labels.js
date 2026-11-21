@@ -4,7 +4,7 @@ module.exports = {
     timeline: "3.1",
     architecture: "4.1",
     heatmap: "6.1", pareto: "6.2", multidate: "6.3", sensitivity: "6.4",
-    variability: "6.5", attenuation: "6.6", contention: "6.7",
+    variability: "6.5", attenuation: "6.6", contention: "6.7", holding: "6.8",
   },
   tab: {
     related: "2.1",
