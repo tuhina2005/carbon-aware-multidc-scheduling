@@ -9,92 +9,182 @@ const center = (text, size = 24, opts = {}) => new d.Paragraph({ alignment: d.Al
 
 const TITLE = "Balancing Green Data Movement and Green Compute: Joint Spatiotemporal Scheduling of Deadline-Constrained Workflows Across Data Centres";
 
+const REPO = "https://github.com/tuhina2005/carbon-aware-multidc-scheduling";
+
+// Front-matter title that is not a heading (kept out of the Table of Contents).
+const frontTitle = (text, pageBreak = true) => new d.Paragraph({ alignment: d.AlignmentType.CENTER, pageBreakBefore: pageBreak,
+  spacing: { before: 240, after: 360 }, children: [new d.TextRun({ text, font: FONT, size: 32, bold: true })] });
+// Front-matter title that is listed in the Table of Contents (List of Tables, List of Figures, ...).
+const frontHeading = (text) => new d.Paragraph({ heading: d.HeadingLevel.HEADING_1, pageBreakBefore: true,
+  alignment: d.AlignmentType.CENTER, children: [new d.TextRun({ text, font: FONT })] });
+
 function titlePage() {
   return [
-    center(TITLE, 36, { bold: true, before: 1200, after: 600 }),
-    center("Project Report Submitted in Partial Fulfilment of the Requirements for the Degree of", 24),
+    center(TITLE.toUpperCase(), 48, { bold: true, after: 480 }),
+    center("Project Report Submitted in Partial Fulfilment of the Requirements for the Degree of", 24, { after: 360 }),
     center("Bachelor of Technology", 28, { bold: true }),
-    center("in", 24),
-    center("Computer Science and Engineering", 28, { bold: true, after: 600 }),
+    center("in", 24, { italics: true }),
+    center("Computer Science and Engineering", 28, { bold: true, after: 480 }),
     center("Submitted by", 24, { italics: true }),
-    center("<Name of the Student 1>: (Roll No. <XXXXXXXX>)", 24),
-    center("<Name of the Student 2>: (Roll No. <XXXXXXXX>)", 24),
-    center("<Name of the Student 3>: (Roll No. <XXXXXXXX>)", 24, { after: 600 }),
-    center("Under the Supervision of", 24, { italics: true }),
-    center("<Supervisor Name>", 24, { bold: true }),
-    center("<Designation>, Department of Computer Science and Engineering", 24, { after: 900 }),
-    center("Department of Computer Science and Engineering", 26, { bold: true }),
+    center("<Name of the Student 1>: (Roll No. <XXXXXXXXXX>)", 24, { after: 60 }),
+    center("<Name of the Student 2>: (Roll No. <XXXXXXXXXX>)", 24, { after: 60 }),
+    center("<Name of the Student 3>: (Roll No. <XXXXXXXXXX>)", 24, { after: 480 }),
+    center("Under the Supervision of", 26, { bold: true, italics: true }),
+    center("<Supervisor Name>", 24, { bold: true, after: 60 }),
+    center("<Designation>, Department of Computer Science and Engineering", 24, { bold: true, after: 720 }),
+    center("Shiv Nadar University, Delhi NCR", 24, { bold: true, after: 120 }),
+    center("Department of Computer Science and Engineering", 24, { bold: true, after: 120 }),
     center("<Month, Year>", 24),
   ];
 }
 
 function declaration() {
   return [
-    new d.Paragraph({ heading: d.HeadingLevel.HEADING_1, children: [new d.TextRun({ text: "Declaration", font: FONT })] }),
+    frontTitle("Declaration", false),
     P("I/We declare that this written submission represents my ideas in my own words and where others' ideas or words have been included, I have adequately cited and referenced the original sources. I also declare that I have adhered to all principles of academic honesty and integrity and have not misrepresented or fabricated or falsified any idea/data/fact/source in my submission. I understand that any violation of the above will be cause for disciplinary action by the University and can also evoke penal action from the sources which have thus not been properly cited or from whom proper permission has not been taken when needed."),
     P(""),
-    ...[1, 2, 3].map(() => P("Name of the Student: ________________    Signature and Date: ________________",
-      { align: d.AlignmentType.LEFT, spacing: { before: 240 } })),
+    ...[1, 2, 3].flatMap(() => [
+      P("**Name of the Student:** ______________________________", { align: d.AlignmentType.LEFT, spacing: { before: 360, after: 0 } }),
+      P("**Signature and Date:** ______________________________", { align: d.AlignmentType.LEFT }),
+    ]),
   ];
 }
 
-function abstract() {
+function acknowledgements() {
   return [
-    new d.Paragraph({ heading: d.HeadingLevel.HEADING_1, pageBreakBefore: true, children: [new d.TextRun({ text: "Abstract", font: FONT })] }),
-    P("Large scientific workflows are increasingly run in whichever data centre (DC) has the cleanest electricity. When their input is terabytes, the data must first cross a wide-area network (WAN), and the transfer, the wait for a greener network, and the carbon-aware schedule of the workflow itself all share one deadline. This project extends CWM, a recent carbon-aware mapper for deadline-constrained DAG workflows in a single DC, to multiple DCs: it jointly chooses *where* to run, *when* to start the transfer, and *how* to schedule the tasks."),
-    P("We formalise this *deadline tension* and prove its structure: optimal compute carbon can only grow when the data arrives later (Prop. 1), network carbon is piecewise linear with an exact finite set of candidate start times (Prop. 2, Cor. 2a), and the benefit of delaying a transfer decays as a sinc function of its duration (Prop. 3). We implement the joint search on top of the CWM C++ solver, evaluate it on real 2024 hourly carbon-intensity data for five regions with close to 1,000 problem instances, and test every claim against fixed-in-advance hypotheses, seven baselines, ablations, and an equal-solver-budget control. While doing so we found and fixed a memory bug in the CWM solver that made its output nondeterministic."),
-    P("The central finding is that **space and time are substitutes**. The cleanest grids (Norwegian hydro, French nuclear) are also the flattest: their carbon intensity varies by only 3–10 gCO₂/kWh within a day, against 158–232 gCO₂/kWh elsewhere. Moving a job there removes almost all value of waiting, so the joint optimiser improves on \"greenest DC, transfer now\" by only 1.8 % on average, and this result is robust to hardware differences, data-centre queues and the network-energy assumption. The same mechanism predicts when joint optimisation does pay: when no flat clean grid is available, its gain triples to 5.3 % (13× larger absolute saving, paired sign test p = 8·10⁻⁶). Finally, a rule derived from the theory captures 76–85 % of the joint optimiser's gain with at most four solver calls instead of about 64."),
-    P("**Keywords:** carbon-aware computing, workflow scheduling, geo-distributed data centres, temporal shifting, data transfer, deadline constraints.", { align: d.AlignmentType.LEFT }),
+    frontTitle("Acknowledgements"),
+    P("I would like to express my sincere gratitude to my supervisor, **<Supervisor Name>**, for continuous guidance, critical feedback and encouragement throughout this project. Their suggestions shaped both the research questions and the way the results are tested and reported."),
+    P("I am also thankful to the **Department of Computer Science and Engineering, Shiv Nadar University**, for the resources and the environment that made this work possible, and to the authors of CWM and CaWoSched for making their code and workflow instances openly available, and to Fraunhofer ISE (Energy-Charts) and CAISO for publishing the electricity data used in this report."),
+    P("Finally, I thank my family and friends for their support and patience."),
+    P(""),
+    P("Regards,", { align: d.AlignmentType.LEFT, spacing: { after: 0 } }),
+    P("**<Name of the Student>**", { align: d.AlignmentType.LEFT }),
   ];
 }
 
 function toc() {
   return [
-    new d.Paragraph({ heading: d.HeadingLevel.HEADING_1, pageBreakBefore: true, children: [new d.TextRun({ text: "Contents", font: FONT })] }),
+    frontTitle("Contents"),
     new d.TableOfContents("Contents", { hyperlink: true, headingStyleRange: "1-2" }),
+  ];
+}
+
+function listOfTables() {
+  return [
+    frontHeading("List of Tables"),
+    new d.TableOfContents("List of Tables", { hyperlink: true, stylesWithLevels: [new d.StyleLevel("TabCaption", 1)] }),
+  ];
+}
+
+function listOfFigures() {
+  return [
+    frontHeading("List of Figures"),
+    new d.TableOfContents("List of Figures", { hyperlink: true, stylesWithLevels: [new d.StyleLevel("FigCaption", 1)] }),
+  ];
+}
+
+function abbreviations() {
+  const rows = (pairs) => pairs.map(([a, b]) => [a, b]);
+  return [
+    frontHeading("List of Symbols and Abbreviations"),
+    P("**Abbreviations**", { align: d.AlignmentType.LEFT, keepNext: true }),
+    ...TAB(null, "", ["Abbreviation", "Meaning"], rows([
+      ["CI", "Carbon intensity of electricity (gCO₂/kWh)"],
+      ["CWM", "Carbon-aware Workflow Mapping, the single-DC scheduler extended here"],
+      ["CaWoSched", "Carbon-aware workflow scheduler (predecessor of CWM)"],
+      ["DAG", "Directed acyclic graph (workflow of tasks and dependencies)"],
+      ["DC", "Data centre"],
+      ["HEFT", "Heterogeneous Earliest Finish Time list scheduler"],
+      ["PUE", "Power usage effectiveness (facility energy / IT energy)"],
+      ["WAN", "Wide-area network"],
+      ["CAISO", "California Independent System Operator"],
+      ["ENTSO-E", "European Network of Transmission System Operators for Electricity"],
+      ["ASan", "AddressSanitizer (memory-error detector)"],
+      ["B1–B7, A1, A2, C1, R1, R3", "Baselines, ablations, control and rules (Table 4.1)"],
+    ]), [28, 72], { fontSize: 20 }),
+    P("**Symbols**", { align: d.AlignmentType.LEFT, keepNext: true, spacing: { before: 240 } }),
+    ...TAB(null, "", ["Symbol", "Meaning"], rows([
+      ["Δ", "Input data volume (GB)"],
+      ["d", "A candidate data centre (DC)"],
+      ["κ", "Length of one CWM time unit (120 s; 30 units per hour)"],
+      ["M", "HEFT makespan of the workflow: how long it takes at full speed"],
+      ["α", "Deadline factor; the deadline is D = ⌈αM⌉"],
+      ["D, D′", "Deadline; time left for computing after the data arrives"],
+      ["B_{eff}, η", "Effective transfer rate; link efficiency (0.95)"],
+      ["τ", "Transfer duration"],
+      ["T_{net}, T_{arr}", "Transfer start time; arrival time"],
+      ["ε", "Network energy per GB sent (kWh/GB; default 0.02)"],
+      ["CI, CI^{net}", "Carbon intensity of a grid; of the network (average of both ends)"],
+      ["𝒢", "Green-power budget of a DC in one interval"],
+      ["P_{idle}, P_{dyn}, f", "Idle power, dynamic power, green fraction of the budget (0.2)"],
+      ["ρ", "Busyness level of the DC queues (queue study)"],
+      ["A", "Amplitude of a grid's daily carbon-intensity cycle"],
+    ]), [28, 72], { fontSize: 20 }),
+  ];
+}
+
+function abstract() {
+  return [
+    frontHeading("Abstract"),
+    P("Large scientific workflows are increasingly run in whichever data centre (DC) has the cleanest electricity. When the input is terabytes, the data must first cross a wide-area network (WAN), and the transfer, any wait for a greener network, and the carbon-aware schedule of the workflow all share one deadline. CWM, a recent carbon-aware scheduler for deadline-constrained workflows (DAGs), handles only one DC. This project extends it to several: it chooses *where* to run, *when* to send the data and *how* to schedule the tasks, together."),
+    P("We first prove three facts about this *deadline tension*. Data that arrives later can never make the computation cleaner (Prop. 1). Only a small, known set of transfer start times needs to be checked (Prop. 2). And the longer a transfer takes, the less there is to gain by waiting to start it (Prop. 3). We then build the joint search on top of the CWM C++ solver and test it on real 2024 hourly carbon-intensity data for five regions, with close to 1,000 problem instances, seven baselines, two ablations, an equal-solver-budget control and hypotheses written down before each run. Along the way we found and fixed a memory bug in the CWM solver that made its output nondeterministic."),
+    P("The central finding is that **space and time are substitutes**. The cleanest grids (Norwegian hydro, French nuclear) are also the flattest: their carbon intensity varies by only 3–10 gCO₂/kWh within a day, against 158–232 gCO₂/kWh elsewhere. Once a job is moved there, there is almost nothing left to gain by waiting, so the joint optimiser beats “greenest DC, send now” by only 1.8 % on average. This result holds with different hardware, with data-centre queues and with almost free network energy. The same mechanism predicts when joint optimisation does pay: when no flat clean grid is available, the gain triples to 5.3 % (13× larger absolute saving, paired sign test p = 8·10⁻⁶). Finally, a cheap rule derived from the theory captures 76–85 % of the gain with at most four solver calls instead of about 64."),
+    P("**Keywords:** carbon-aware computing, workflow scheduling, geo-distributed data centres, temporal shifting, data transfer, deadline constraints.", { align: d.AlignmentType.LEFT }),
+    P(`**Source code:** ${REPO}`, { align: d.AlignmentType.LEFT }),
   ];
 }
 
 function ch1() {
   return [
     H1("Introduction"),
-    P("Data centres consume a growing share of the world's electricity, and the carbon emitted per kilowatt-hour depends strongly on where and when that electricity is drawn. Carbon-aware computing exploits this variation in two ways: *temporal shifting* runs flexible work when the local grid is cleanest [cite:waitawhile,carbonscaler,cics], and *spatial shifting* runs it where the grid is cleanest [cite:casper,k8s]. CWM [cite:cwm] brings temporal shifting to scientific workflows: it maps and schedules a deadline-constrained DAG onto a heterogeneous cluster so that as much work as possible falls into periods of high green-power availability."),
-    P("CWM, like its predecessor CaWoSched [cite:cawosched], assumes the workflow already sits in the DC that runs it. For the large scientific workflows targeted here this is often false: the input is generated or stored at one site, may be terabytes in size, and must be moved before computation can start. Moving 1 TB over a 1 Gbit/s link takes about 2.3 hours, the network itself consumes energy [cite:aslan], and the grid along the path also varies in time [cite:lints,e2e]."),
-    H2("1.1", "The deadline tension"),
-    P("When the transfer and the computation share one end-to-end deadline, the decisions interact. Waiting for a cleaner network can save transfer carbon, but every minute spent waiting is a minute less for CWM to place the workflow's tasks into green hours. Choosing a distant, cleaner DC lengthens the transfer and shortens the compute window further. We call this the *deadline tension*. No single-dimension technique resolves it: transfer schedulers ignore the compute that follows, workflow schedulers ignore where the data comes from, and placement systems ignore DAG precedence and the timing of the transfer."),
-    H2("1.2", "Research questions"),
-    ...numbered([
-      "**RQ1.** How should the joint problem (where, when, how) be formulated, and what structure does it have that an algorithm can exploit?",
-      "**RQ2.** On real grid data, how much carbon does joint optimisation save compared with simple strategies such as \"send the data now to the greenest DC\"?",
-      "**RQ3.** *When* does joint optimisation matter, and why? Which properties of grids, hardware, contention or data origin decide it?",
-      "**RQ4.** Can the theory be turned into a cheap rule that captures most of the benefit without an exhaustive search?",
-    ]),
-    H2("1.3", "Contributions"),
+    H2("1.1", "Background"),
+    P("Data centres use a growing share of the world's electricity, and how much carbon each kilowatt-hour emits depends on where and when it is drawn. In 2024 the Polish grid emitted almost twenty times more per kilowatt-hour than the Norwegian one ([tab:regions]), and a solar-heavy grid is cleaner at noon than at night. Carbon-aware computing uses this in two ways. *Temporal shifting* runs flexible work when the local grid is cleanest [cite:waitawhile,carbonscaler,cics]. *Spatial shifting* runs it where the grid is cleanest [cite:casper,k8s]."),
+    P("CWM [cite:cwm] brings temporal shifting to scientific workflows. A workflow is a set of tasks with dependencies (a DAG) that must finish by a deadline. CWM decides which processor runs each task and when, so that as much work as possible happens in hours with plenty of green power."),
+    H2("1.2", "Motivation: the deadline tension"),
+    P("CWM assumes the workflow is already in the data centre (DC) that runs it. For large scientific workflows that is often not true. The input sits at one site, can be terabytes in size, and has to be moved before any task can start. Moving 1 TB over a 1 Gbit/s link takes about 2.3 hours, the network itself uses energy [cite:aslan], and the grids along the way get cleaner and dirtier through the day [cite:lints,e2e]."),
+    P("Once the transfer and the computation share one deadline, the decisions pull against each other. Waiting for a cleaner network saves transfer carbon, but every minute of waiting is a minute less for CWM to fit the tasks into green hours. A distant, cleaner DC means a longer transfer and an even shorter compute window. We call this the *deadline tension*. No existing technique handles it: transfer schedulers ignore the computation that follows, workflow schedulers ignore where the data comes from, and placement systems ignore task dependencies and transfer timing."),
+    H2("1.3", "A worked example"),
+    P("Here is one real case from our experiments. The eager1000 workflow (1,000 tasks, about 11 hours of work) has 1 TB of input in Frankfurt. It is submitted at 06:00 UTC on 17 April 2024 and must finish within 28 hours. There are three sensible plans:"),
     ...bullets([
-      "**Model and theory.** A formulation of joint DC selection, transfer timing and DAG scheduling under a shared deadline, with proofs that compute carbon is monotone in the arrival time (Prop. 1), that network carbon has an exact finite candidate set (Prop. 2, Cor. 2a), and that the value of waiting decays with transfer duration (Prop. 3); extensions to heterogeneous hardware and DC queues (Chapter 3).",
-      "**Implementation.** A Python system around the CWM C++ solver that shifts and truncates power profiles, evaluates every candidate exactly, and reports two carbon metrics, seven baselines, two ablations and an equal-solver-budget control; resumable, cached and covered by 118 automated tests (Chapter 4).",
-      "**A solver bug fix.** AddressSanitizer [cite:asan] located a heap buffer over-read in the CWM mapper that made its output depend on uninitialised memory; we fixed it and showed that no reported result changed (Section 4.5).",
-      "**Findings.** On real 2024 data the cleanest grids are also the flattest, so location and timing are substitutes: joint optimisation adds little when a flat clean grid is reachable, robustly so, and triples its gain when none is (Chapter 6).",
-      "**A theory-guided rule** that ranks candidates without the solver and captures 76–85 % of the joint optimiser's gain with at most four solver calls (Sections 4.4 and 6.9).",
+      "**Stay in Frankfurt.** No transfer, and CWM schedules the job on the German grid. Total: **98.4 kg CO₂**.",
+      "**Send it to Paris now.** The French grid is far cleaner. The transfer takes 2.3 hours and costs 4.3 kg, and the computation costs 5.6 kg. Total: **9.9 kg**, ten times less.",
+      "**Send it to Paris, but wait 4.7 hours first.** The transfer then runs over Germany's sunny midday, so it costs only 3.0 kg. The computation now has about 4.6 fewer hours to work with and costs a little more, 5.8 kg. Total: **8.8 kg**, another 11 % less.",
     ]),
-    H2("1.4", "Organisation"),
-    P("Chapter 2 reviews related work. Chapter 3 formulates the problem and develops the theory. Chapter 4 describes the system and algorithms, Chapter 5 the data and experiments, and Chapter 6 the results. Chapter 7 discusses implications and threats to validity, and Chapter 8 concludes."),
+    P("The example shows both sides of the project. Choosing *where* to run is the big win (98.4 → 9.9 kg). Choosing *when* to send the data adds a smaller but real saving (9.9 → 8.8 kg), and only because the shorter compute window costs less than the cleaner transfer saves. As we will see, this case is one of the better ones: over the whole year the extra saving from timing averages 1.8 %, and the main question of this report is why."),
+    H2("1.4", "Objective"),
+    P("The objective is to answer one question: *when data must move before the work can start, how much carbon does choosing the DC, the transfer time and the schedule together save, and why?* We break it into four research questions:"),
+    ...numbered([
+      "**RQ1.** How should the joint problem (where, when, how) be formulated, and what structure does it have that an algorithm can use?",
+      "**RQ2.** On real grid data, how much carbon does joint optimisation save compared with simple strategies such as “send the data now to the greenest DC”?",
+      "**RQ3.** *When* does joint optimisation matter, and why?",
+      "**RQ4.** Can a cheap rule capture most of the benefit without searching every option?",
+    ]),
+    H2("1.5", "Contributions"),
+    ...bullets([
+      "**Model and theory.** We formulate the problem and prove three facts about it: data that arrives later can never make the computation cleaner; only a small, known set of transfer start times needs checking; and the longer a transfer takes, the less there is to gain by waiting (Chapter 3).",
+      "**Implementation.** A Python system around the CWM C++ solver that evaluates every option exactly and compares against seven simpler strategies and three controls. It is resumable, cached and covered by 129 automated tests (Chapter 4).",
+      "**A solver bug fix.** We found and fixed a memory bug in CWM that made its output random, and showed that no result changed (Section 4.5).",
+      "**Findings.** The cleanest grids are also the flattest, so choosing the place and choosing the time substitute for each other. Joint optimisation adds little when a flat clean grid is reachable, and three times as much when none is (Chapter 6).",
+      "**A cheap rule** that captures 76–85 % of the joint optimiser's gain with at most four solver calls instead of about 64 (Sections 4.4 and 6.5).",
+    ]),
+    H2("1.6", "Organisation"),
+    P(`Chapter 2 reviews related work and states what is new here. Chapter 3 defines the problem and the theory behind it. Chapter 4 describes how we built and tested the system, and Chapter 5 the data and experiments. Chapter 6 presents the results as answers to four questions, then discusses them and compares them with earlier work. Chapter 7 covers implications and limitations, Chapter 8 the conclusions, and Chapter 9 future work. The source code, data and results are available at ${REPO} (Section 4.6).`),
   ];
 }
 
 function ch2() {
   return [
-    H1("Related Work"),
+    H1("Related Work and Literature Survey"),
     H2("2.1", "Carbon-aware workflow scheduling"),
-    P("HEFT [cite:heft] is the standard list scheduler for DAGs on heterogeneous processors and is the reference makespan used to define deadlines in this line of work. CaWoSched [cite:cawosched] shifts the tasks of a workflow with a fixed HEFT mapping into greener intervals under a deadline, and shows the problem is polynomial on one processor and NP-hard from two. CWM [cite:cwm] removes the fixed-mapping assumption and jointly maps and schedules the tasks, with a HEFT-based construction, dynamic-programming processor selection and local search; it proves the decision problem strongly NP-complete. Both operate on a single cluster whose green-power budget varies over time; neither models data movement or multiple sites. Our work uses CWM as its inner solver."),
+    P("HEFT [cite:heft] is the standard way to schedule a DAG on mixed processors. It ignores carbon, and its makespan is the yardstick used to set deadlines in this line of work. CaWoSched [cite:cawosched] keeps HEFT's choice of processors and only shifts tasks into greener hours. CWM [cite:cwm] goes further and chooses processors and timing together, with a HEFT-like construction, dynamic programming and local search; it proves the problem strongly NP-complete. Both work on a single cluster. Neither moves data or looks at more than one site. We use CWM, unchanged apart from a bug fix, as the scheduler inside each DC."),
     H2("2.2", "Temporal shifting"),
-    P("Wiesner *et al.* [cite:waitawhile] quantified how much carbon delay-tolerant jobs save by waiting for cleaner hours in Germany, Great Britain, France and California, and showed that the potential depends on how strongly each grid varies over time. CarbonScaler [cite:carbonscaler] scales the resources of elastic batch jobs with the carbon intensity instead of suspending them. Google's carbon-intelligent compute management [cite:cics] delays temporally flexible workloads using day-ahead forecasts. These systems treat jobs as independent and do not move data."),
+    P("Wiesner *et al.* [cite:waitawhile] measured how much carbon delay-tolerant jobs save by waiting for cleaner hours in Germany, Great Britain, France and California. Their key observation is that the savings depend on how much each grid varies over the day. CarbonScaler [cite:carbonscaler] grows and shrinks elastic batch jobs with the carbon intensity instead of pausing them, and Google [cite:cics] delays flexible work using day-ahead forecasts. All three treat jobs as independent and none of them moves data."),
     H2("2.3", "Spatial and spatiotemporal shifting"),
-    P("CASPER [cite:casper] places distributed web-service load across regions to minimise carbon under latency objectives. A recent Kubernetes-based study [cite:k8s] combines spatial and temporal shifting for deadline-tolerant jobs and reports that the difference in carbon intensity between regions dominates the savings, an observation our results explain mechanistically (Section 6.4)."),
+    P("CASPER [cite:casper] spreads web traffic across regions to cut carbon while keeping latency low. A recent Kubernetes-based study [cite:k8s] combines spatial and temporal shifting for deadline-tolerant jobs and finds that the difference between regions dominates the savings. Our results explain why (Section 6.2)."),
     H2("2.4", "Carbon-aware data transfer"),
-    P("LinTS [cite:lints] formulates the temporal scheduling of transfers between cloud DCs as a linear program and reports large savings while meeting all transfer deadlines. Goldverg *et al.* [cite:e2e] measure the footprint of end-to-end data movement and propose shifting transfers in time, space and overlay routes. The energy intensity of data transmission has been estimated at 0.06 kWh/GB for 2015, halving roughly every two years [cite:aslan]; we sweep this parameter rather than fix it (Section 5.3). These works optimise the transfer alone; the compute that consumes the data, and its deadline, are outside their model."),
-    H2("2.5", "Positioning"),
-    P("[tab:related] summarises which decisions each line of work makes, as described by the cited papers. This project is, to our knowledge, the first to couple carbon-aware transfer timing with carbon-aware DAG scheduling under a single shared deadline. More importantly than coverage, it explains *when* the coupling matters: the dominance of location reported in [cite:k8s] is a consequence of clean grids being flat, and the coupling becomes valuable exactly when that is not available."),
+    P("LinTS [cite:lints] schedules transfers between cloud DCs over time with a linear program and saves substantial carbon while meeting every transfer deadline. Goldverg *et al.* [cite:e2e] measure the footprint of moving data end to end and propose shifting transfers in time, space and route. Sending a gigabyte was estimated to take 0.06 kWh in 2015, halving roughly every two years [cite:aslan]; we sweep this value rather than fix it (Section 5.3). All of these optimise the transfer alone. The computation that uses the data, and its deadline, are outside their model."),
+    H2("2.5", "Novelty of this work"),
+    P("[tab:related] shows which decisions each line of work makes. What is new here is twofold. **First, the coupling:** as far as we know, this is the first work to combine carbon-aware transfer timing with carbon-aware workflow scheduling under one shared deadline, so that waiting, transferring and computing all compete for the same hours. **Second, the explanation:** we do not just measure the gain, we explain *when* it appears. The dominance of location seen in [cite:k8s] turns out to follow from clean grids being flat, and joint scheduling becomes worthwhile exactly when no such grid is available. We do not propose a new scheduler for inside the DC."),
     ...TAB("related", "Decisions made by related approaches (✓ = modelled, – = not modelled).",
       ["Approach", "Spatial (where)", "Temporal compute", "Transfer timing", "DAG precedence", "Shared deadline"],
       [["HEFT [cite:heft]", "–", "–", "–", "✓", "–"],
@@ -111,58 +201,42 @@ function ch2() {
 function ch3() {
   return [
     H1("Problem Formulation and Theory"),
+    P("This chapter states the problem precisely and gives the three properties the search relies on. We give each result with a short reason rather than a formal proof, and say what it means in practice."),
     H2("3.1", "System model"),
-    P("A workflow G = (V, E) with input volume Δ (GB) is generated at a source DC d_{s}. A set 𝒟 of candidate DCs, which always contains d_{s}, can run it; each DC d has a cluster of heterogeneous processors and an hourly carbon-intensity (CI) series CI_{d}(t) in gCO₂/kWh. The WAN from d_{s} to d offers nominal bandwidth B_{d} with efficiency η, so the effective rate is B_{eff} = ηB_{d}. CWM works in integer time units of κ seconds (κ = 120 s, so one hour is 30 units). The job has a global deadline D = ⌈αM⌉ units, where M is the HEFT makespan of G and α ≥ 1 the deadline factor, as in [cite:cwm]."),
-    P("The decisions are the execution DC d, the transfer start T_{net}, and the task mapping and start times inside d, which CWM chooses. [fig:timeline] shows how the four phases share the deadline. The transfer lasts"),
-    EQ("tau", "τ_{d} = Δ / B_{eff}   (τ_{d} = 0 if d = d_{s}),"),
-    P("and compute may start only when all data has arrived, rounded up to whole units, which leaves CWM the effective deadline D′:"),
-    EQ("arrival", "T_{arr}(d, T_{net}) = ⌈(T_{net} + τ_{d}) / κ⌉,      D′ = D − T_{arr}."),
+    P("A workflow with Δ GB of input starts at a source DC (Frankfurt in our experiments). Several candidate DCs, including the source, could run it. Each DC has its own processors and an hourly carbon-intensity (CI) series in gCO₂/kWh. Data moves to DC d at an effective rate B_{eff} (the link bandwidth times an efficiency η), so the transfer takes τ = Δ / B_{eff}. CWM measures time in whole units of κ = 120 s (30 units per hour). The deadline is D = ⌈αM⌉ units, where M is the workflow's HEFT makespan and α ≥ 1 says how much slack the job has, as in [cite:cwm]."),
+    P("Three things are decided: the DC d, the time T_{net} at which the transfer starts, and the schedule inside d, which CWM chooses. Computation can start only when all the data has arrived, and CWM gets whatever is left of the deadline ([fig:timeline]):"),
+    EQ("arrival", "T_{arr} = ⌈(T_{net} + Δ / B_{eff}) / κ⌉,      D′ = D − T_{arr}."),
     ...FIG("timeline", "figures/fig_timeline.png", "The deadline tension: waiting, transfer, queue (Section 3.5) and the CWM schedule all fit inside one global deadline D. Waiting longer or choosing a farther DC shrinks the window D′ left for carbon-aware scheduling.", 6.3),
-    H2("3.2", "Objective and carbon metrics"),
-    P("The objective is the total carbon of moving and computing,"),
-    EQ("objective", "min over (d, T_{net}) :   NetCarbon_{d}(T_{net}) + CompCarbon_{d}(T_{arr}),"),
-    P("where d ranges over 𝒟 and T_{net} over [0, T^{max}_{d}], with T^{max}_{d} = κ(D − M_{d}) − τ_{d} the latest start that still leaves at least the HEFT makespan M_{d}. Network carbon charges ε kWh per GB, attributionally, at the endpoint-average WAN carbon intensity:"),
-    EQ("net", "NetCarbon_{d}(T) = ε Δ · (1/τ_{d}) · ∫ CI^{net}_{s,d}(t) dt  over [T, T + τ_{d}],"),
-    EQ("wanci", "CI^{net}_{s,d}(t) = ( CI_{s}(t) + CI_{d}(t) ) / 2,   CI_{s} = CI of the source DC."),
-    P("For compute we report two metrics. The solver returns, per interval j of the shifted and truncated profile, the total energy E^{tot}_{j} and the energy above the green budget E^{exc}_{j}; k(·) converts CWM energy units to kWh. The **location-based** metric, our primary one, prices the dynamic energy (total minus idle) at the grid CI:"),
-    EQ("loc", "CompCarbon^{loc}_{d} = Σ_{j} k( E^{tot}_{j} − P_{idle}|I_{j}| ) · CI_{d,j}."),
-    P("The **brown** metric is CWM's native objective priced at the grid CI:"),
-    EQ("brown", "CompCarbon^{brown}_{d} = Σ_{j} k( E^{exc}_{j} ) · CI_{d,j}."),
-    P("CWM needs a green-power budget per interval. We derive it identically for every DC from the CI,"),
-    EQ("budget", "𝒢_{d,j} = P_{idle} + max(0, 1 − CI_{d,j}/800) · f · P_{dyn},"),
-    P("with f = 0.2 for the cluster size used, following the CWM instances. The floor 𝒢 ≥ P_{idle} matters for Prop. 1. Because the budget itself depends on CI, the brown metric is zero for any DC whose budget covers the job, however dirty its grid: on real data it prefers Frankfurt (≈ 320 gCO₂/kWh) to Paris (≈ 36) for small jobs. We therefore report the location metric as primary and the brown metric as secondary throughout."),
-    H2("3.3", "Structural properties"),
-    P("Let C^{*}_{d}(a) be the optimal compute carbon at DC d when the data arrives at unit a, and f_{d}(T) = NetCarbon_{d}(T) + C^{*}_{d}(T_{arr}(T))."),
-    STMT("Proposition 1 (monotone compute).", "If 𝒢_{d,j} ≥ P_{idle} for all intervals, C^{*}_{d}(a) is non-decreasing in a under the brown metric. Under the location metric it is non-decreasing without this condition."),
-    P("*Proof.* A schedule that is feasible for arrival a_{2} (all tasks in [a_{2}, D)) is feasible for any a_{1} ≤ a_{2}, because the absolute end D is unchanged. When idle power never exceeds the budget, a schedule's brown energy depends only on its busy periods, not on the window; the location metric subtracts idle power by definition. So the feasible set only shrinks as a grows while the cost of each schedule stays the same. ∎"),
-    P("Prop. 1 is the formal content of the tension: waiting can lower network carbon but can never lower optimal compute carbon. The CWM heuristic does not satisfy it exactly; on our data its compute carbon drops in 12–34 % of consecutive arrival steps, which is why we control for best-of-N effects (Section 4.3)."),
-    STMT("Proposition 2 (network breakpoints).", "For hourly piecewise-constant CI, NetCarbon_{d}(T) is piecewise linear in T, and its minimum over [0, T^{max}_{d}] lies in ℬ = {0, T^{max}_{d}} ∪ {kh} ∪ {kh − τ_{d}}, where h is one hour."),
-    P("*Proof.* Differentiating [eq:net],"),
-    EQ("deriv", "dNetCarbon_{d}/dT = (εΔ/τ_{d}) · ( CI^{net}(T + τ_{d}) − CI^{net}(T) ),"),
-    P("which is piecewise constant, with changes only where the start or the end of the transfer crosses an hour boundary. A piecewise-linear function attains its minimum at a kink or an endpoint. ∎"),
-    STMT("Corollary 2a (exact candidates for the total).", "If the compute term is any non-decreasing function of the arrival unit, f_{d} attains its minimum on the finite set ℬ ∪ {aκ − τ_{d} : a ∈ ℤ} ∩ [0, T^{max}_{d}]. On segments of ℬ where NetCarbon is non-decreasing only the left endpoint is needed."),
-    P("*Proof.* On each arrival cell ((a−1)κ − τ_{d}, aκ − τ_{d}] the compute term is constant and NetCarbon is piecewise linear with kinks in ℬ, so the minimum over the cell is at a kink or a cell endpoint; the open left end is dominated by the previous cell's right endpoint, whose compute term is no larger. Where NetCarbon is non-decreasing, moving later raises both terms. ∎ Our search evaluates ℬ; it is exact for network carbon and can miss an optimum only inside a segment where network carbon decreases."),
-    STMT("Proposition 3 (attenuation of waiting).", "For a daily-periodic WAN intensity CI^{net}(t) = c̄ + A cos(ωt), ω = 2π/P, P = 24 h,"),
-    EQ("sinc", "NetCarbon(T) = εΔ [ c̄ + A · sinc(ωτ/2) · cos(ω(T + τ/2)) ],"),
-    P("with sinc(x) = sin(x)/x, so the most that waiting can save is"),
-    EQ("maxsave", "max_{T} NetCarbon − min_{T} NetCarbon = 2 εΔ A |sinc(πτ/P)|."),
-    P("*Proof.* Integrate the cosine over [T, T+τ] and apply the sum-to-product identity. ∎ The relative saving falls as the transfer lengthens and vanishes at τ = P; the absolute saving ∝ τ|sinc(πτ/P)| peaks at τ = 12 h. On real data the measured saving decays more slowly than the harmonic predicts because weather adds non-periodic variability ([fig:attenuation]), so Prop. 3 is an explanation of the trend rather than a quantitative model. Crucially, the saving scales with the *amplitude* A of the grid's daily cycle, which is the quantity that turns out to decide everything in Chapter 6."),
-    P("**Existence and complexity.** The feasible set is non-empty iff τ_{d} ≤ κ(D − M_{d}); since the arrival unit takes finitely many values and Cor. 2a gives a finite candidate set, f_{d} attains its minimum. The problem contains CWM's problem as the special case d = d_{s}, Δ = 0, which is strongly NP-complete [cite:cwm], so ours is strongly NP-hard and we use CWM as a heuristic inner solver."),
-    H2("3.4", "Heterogeneous hardware"),
-    P("In the extension studies DC d may have its own processor mix, with HEFT makespan M_{d}, and a facility power usage effectiveness PUE_{d}. The deadline stays global, D = ⌈αM_{s}⌉ (M_{s} on the source DC's hardware), and feasibility at d requires D′ ≥ M_{d}. If the green budget scales with facility power, facility excess energy is PUE_{d} · max(0, P − 𝒢), so both compute metrics scale exactly by PUE_{d} and the inner scheduling problem is unchanged; Props. 1–3 hold per DC."),
+    H2("3.2", "Objective and carbon"),
+    P("We minimise the total carbon of moving and computing, over every DC and every allowed transfer start:"),
+    EQ("objective", "min over (d, T_{net}) :   NetCarbon_{d}(T_{net}) + CompCarbon_{d}(T_{arr})."),
+    P("The latest allowed start still leaves enough time to run the workflow at full speed. **Network carbon** charges ε kWh for every GB sent, at the CI of the network during the transfer. We take that CI to be the average of the source and destination grids, CI^{net}:"),
+    EQ("net", "NetCarbon_{d}(T) = ε Δ · (average of CI^{net} over the transfer from T to T + τ)."),
+    P("**Compute carbon** charges the energy the work adds on top of idle power, at the DC's grid CI in each interval j of the schedule:"),
+    EQ("loc", "CompCarbon_{d} = Σ_{j} k( E^{tot}_{j} − P_{idle}|I_{j}| ) · CI_{d,j}."),
+    P("Here E^{tot}_{j} is the energy CWM's schedule uses in interval j, and k(·) converts CWM's energy units to kWh. CWM itself also needs a *green-power budget* for each interval: how much power it may use while still counting as green. We derive it from the CI in the same way for every DC, so cleaner hours give a larger budget:"),
+    EQ("budget", "𝒢_{d,j} = P_{idle} + max(0, 1 − CI_{d,j}/800) · f · P_{dyn},   with f = 0.2."),
+    P("CWM optimises its own metric, the energy used *above* this budget. That metric has a blind spot, so we use it only as a secondary measure; Section 5.6 explains why."),
+    H2("3.3", "Three properties of the problem"),
+    STMT("Proposition 1 (waiting never makes computing cleaner).", "The best achievable compute carbon at a DC can only stay the same or rise as the data arrives later."),
+    P("*Reason.* The deadline is fixed, so any schedule that fits after a later arrival also fits after an earlier one; arriving later only removes options. This is the deadline tension in one line: waiting can lower network carbon, but never compute carbon. CWM is a heuristic and does not follow this exactly (its compute carbon drops in 12–34 % of consecutive arrival steps on our data), which is why we add a control for solver luck (Section 4.3)."),
+    STMT("Proposition 2 (only a few start times need checking).", "With hourly CI data, the best transfer start for network carbon is always either the earliest or latest allowed start, or a start where the transfer begins or ends exactly on an hour boundary. Together with the arrival-time steps, this finite set also contains the best start for the total."),
+    P("*Reason.* Within an hour the CI is constant, so network carbon changes in straight lines as the start time moves, and bends only when the start or end of the transfer crosses an hour boundary. A function made of straight pieces is lowest at a bend or an end. Our search checks exactly these points, so it is exact for network carbon."),
+    STMT("Proposition 3 (long transfers gain less from waiting).", "If the network CI follows a daily cycle of amplitude A, the most that waiting can save on network carbon is"),
+    EQ("maxsave", "2 εΔ A |sinc(πτ / 24 h)|,   with sinc(x) = sin(x)/x."),
+    P("*Reason.* A transfer averages the CI over its whole duration, and averaging a daily wave over τ hours shrinks it by exactly this sinc factor. In practice a long transfer covers both clean and dirty hours whenever it starts, so moving it helps less, and at τ = 24 h not at all. On real data the saving falls more slowly than this because weather is not perfectly daily ([fig:attenuation]). The key point is that the saving grows with the *amplitude* A of the grid's daily cycle. That single quantity turns out to decide most of the results in Chapter 6."),
+    P("**Complexity.** CWM's own problem is the special case with no data to move, and it is strongly NP-complete [cite:cwm], so ours is strongly NP-hard. We therefore use CWM as a heuristic inside an exact search over DCs and transfer starts."),
+    H2("3.4", "Different hardware"),
+    P("In one study each DC has its own processor mix and its own power usage effectiveness (PUE: total facility energy divided by IT energy). The deadline is still set on the source DC's hardware, and a DC is usable only if its own HEFT makespan fits in the remaining window. A higher PUE scales both carbon measures by exactly that factor, so the scheduling problem inside the DC is unchanged and the three properties still hold."),
     H2("3.5", "Data-centre queues"),
-    P("A DC may have a queue q_{d}(t) ≥ 0, piecewise constant on the hourly grid. Compute then starts at"),
-    EQ("start", "s_{d}(T) = ⌈( T_{arr} + q_{d}(T_{arr}) ) / κ⌉,      D′ = D − s_{d}(T)."),
-    P("Prop. 1 still holds in the start time s. However s_{d}(T) need no longer be monotone in T: if a queue drains at an hour boundary, arriving just after it starts compute *earlier* than arriving just before. This is the only new mechanism queues add, since waiting can now also reduce compute carbon. Hour boundaries are multiples of 30κ, so queue changes coincide with arrival-cell boundaries already in Cor. 2a's set; when queue lengths are multiples of κ the candidate set is unchanged, and otherwise one extra point per cell, aκ − τ_{d} − q, must be added."),
-    H2("3.6", "Why space and time substitute"),
-    P("By Prop. 3, the value of temporal shifting at a DC is bounded by roughly twice its daily CI amplitude per unit of energy. Choosing the DC with the lowest mean CI is, on real grids, also choosing one with a small amplitude: the lowest-carbon grids are hydro and nuclear, which do not follow the solar cycle. Once the spatial choice is made, the temporal term is therefore bounded by a small constant, and the joint optimum differs from \"greenest DC, send now\" only through the network path (whose CI keeps half of the *source* amplitude, [eq:wanci]) and through near-ties between clean grids. This argument makes a testable prediction: removing the flat clean grids removes the bound, so joint optimisation should pay more. Section 6.5 tests it."),
-    H2("3.7", "A relaxation for cheap ranking"),
-    P("For RQ4 we need to rank candidates without running the solver. For candidate (d, T) define"),
-    EQ("rule", "f̂_{d}(T) = NetCarbon_{d}(T) + E · (PUE_{d}/PUE_{ref}) · CI^{(L)}_{d}(s_{d}(T), D),"),
-    P("where CI^{(L)}_{d}(s, D) is the mean of the L cleanest whole hours of CI_{d} in [s, D), E is the dynamic energy of one reference schedule (one solver call), and L = ⌈M⌉ hours is the job's minimum duration."),
-    STMT("Lemma (relaxation).", "If the job's dynamic energy E could be spread at constant power over any L whole hours of the window, ignoring precedence and the green budget, the minimum location-based compute carbon is exactly E · PUE_{d} times the mean CI of the L cleanest hours."),
-    P("*Proof.* Minimising a sum of L equal-energy slots over the available hours selects the L smallest CI values. ∎ So [eq:rule] is network carbon, which is exact, plus the optimum of a preemptive relaxation of the compute term, and it is non-decreasing in the start time, consistent with Prop. 1. It is optimistic about how much work fits into clean hours, and it models no budget, so it is weaker under the brown metric."),
+    P("In another study a DC may have a queue: a job that arrives has to wait q hours before it can start. This adds one new effect. If a queue empties at an hour boundary, arriving just after it can start the computation *earlier* than arriving just before. So with queues, waiting can sometimes reduce compute carbon too. These boundaries are already among the start times checked by Proposition 2, so the search stays exact for queue lengths in whole time units."),
+    H2("3.6", "Why place and time substitute"),
+    P("Proposition 3 says the value of waiting at a DC is limited by how much its grid swings during the day. On real grids, the DC with the lowest average CI also swings very little: the cleanest grids run on hydro and nuclear power, which do not follow the sun. So once the cleanest DC is chosen, there is little left to gain from timing. The only remaining room is the network, whose CI keeps half of the *source* grid's swing, and near-ties between clean grids. This argument makes a prediction we can test: take away the flat clean grids, and joint scheduling should pay off much more. Section 6.3 tests it."),
+    H2("3.7", "A cheap estimate for ranking"),
+    P("For RQ4 we want to rank all candidates without running CWM on each. We estimate the total carbon of starting the transfer at time T at DC d as"),
+    EQ("rule", "estimate = NetCarbon_{d}(T) + E · (PUE_{d}/PUE_{ref}) · (mean CI of the L cleanest hours left before the deadline),"),
+    P("where E is the job's energy, taken from a single CWM run, and L = ⌈M⌉ hours is how long the job needs at minimum. The estimate is exact for the network and optimistic for the computation: it pretends the job could run in the cleanest hours that remain, ignoring task dependencies and the green budget. Like the real compute carbon, it never improves as the start moves later."),
   ];
 }
 
-module.exports = { titlePage, declaration, abstract, toc, ch1, ch2, ch3, TITLE };
+module.exports = { titlePage, declaration, acknowledgements, toc, listOfTables, listOfFigures, abbreviations, abstract, ch1, ch2, ch3, TITLE, REPO };
