@@ -1,6 +1,7 @@
 // Chapter-wise numbers of every figure, table and equation (declared so the text can refer ahead).
 module.exports = {
   fig: {
+    cwm: "2.1",
     timeline: "3.1",
     architecture: "4.1",
     heatmap: "6.1", pareto: "6.2", multidate: "6.3", sensitivity: "6.4",
@@ -20,6 +21,7 @@ module.exports = {
   // short titles for the List of Figures / List of Tables
   title: {
     fig: {
+      cwm: "How CWM builds a schedule inside one data centre",
       timeline: "The deadline tension",
       architecture: "System architecture of the multi-DC extension",
       heatmap: "What Ours chooses on a single day (17 April 2024)",

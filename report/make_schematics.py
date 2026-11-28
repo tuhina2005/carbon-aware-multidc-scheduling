@@ -74,7 +74,51 @@ def architecture():
     plt.close(fig)
 
 
+def cwm_pipeline():
+    """How CWM (Schweisgut et al.) builds one schedule: inputs, its two phases, output."""
+    fig, ax = plt.subplots(figsize=(9, 3.9))
+    w, h = 2.25, 1.4
+    boxes = {
+        "in": (0.1, 1.95, "#ffffff", "Inputs\nworkflow + deadline D\nprocessors: speed,\nidle & working power\ngreen budget\nper interval"),
+        "pick": (2.75, 1.95, "#ffffff", "① Pick processors\nper interval: the\nfastest set that fits\nthe green budget\n(knapsack DP)"),
+        "place": (5.4, 1.95, "#ffffff", "② Place tasks\nin HEFT priority\norder, each on the\nprocessor that\nfinishes it earliest"),
+        "ls": (8.05, 1.95, COMP, "③ Local search\nshift tasks out of\nintervals over the\ngreen budget,\nkeeping the deadline"),
+        "rep": (5.4, 0.15, QUEUE, "④ Deadline repair\nreschedule late\ntasks on all\nprocessors (HEFT-SL),\nthen local search"),
+        "out": (8.05, 0.15, NET, "Output\nschedule + its\nbrown energy\n(energy used above\nthe green budget)"),
+    }
+    for key, (x, y, face, label) in boxes.items():
+        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.02,rounding_size=0.08",
+                                    facecolor=face, edgecolor=INK2, linewidth=1))
+        title, *rest = label.split("\n")
+        light = face in (COMP, NET)
+        ax.text(x + w / 2, y + h - 0.22, title, ha="center", va="center", fontsize=10.5, weight="bold",
+                color="#ffffff" if light else INK)
+        ax.text(x + w / 2, y + (h - 0.35) / 2, "\n".join(rest), ha="center", va="center", fontsize=8.6,
+                color="#ffffff" if light else INK2)
+
+    def arrow(p, q, label=None):
+        ax.add_patch(FancyArrowPatch(p, q, arrowstyle="-|>", mutation_scale=11, color=INK2, lw=1.1))
+        if label:
+            ax.text((p[0] + q[0]) / 2 + 0.08, (p[1] + q[1]) / 2, label, fontsize=8.6, color=INK2, va="center")
+    arrow((2.35, 2.65), (2.75, 2.65))
+    arrow((5.0, 2.65), (5.4, 2.65))
+    arrow((7.65, 2.65), (8.05, 2.65))
+    arrow((9.17, 1.95), (9.17, 1.55), "deadline met")
+    arrow((8.6, 1.95), (6.9, 1.55))
+    ax.text(7.45, 1.85, "deadline missed", fontsize=8.6, color=INK2, ha="right", va="center")
+    arrow((7.65, 0.85), (8.05, 0.85))
+    ax.text(5.05, 3.55, "Phase 1: carbon first", fontsize=9.5, color=INK2, ha="center")
+    ax.text(5.2, 0.85, "Phase 2 (only if needed):\nmeet the deadline", fontsize=9.5, color=INK2, ha="right", va="center")
+    ax.set_xlim(0, 10.4)
+    ax.set_ylim(0, 3.75)
+    ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(OUT / "fig_cwm.png", dpi=200)
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
     timeline()
     architecture()
+    cwm_pipeline()
