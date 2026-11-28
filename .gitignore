@@ -57,12 +57,13 @@ cwm_multidc/results/cache.jsonl
 # raw public CI downloads (re-fetchable)
 cwm_multidc/data/public_ci/raw/
 
-# pre-fix solver backups (identical to the results committed before the mapper.cpp fix; kept locally for comparison)
-cwm_multidc/results/cache_pre_fix_solver.jsonl
-cwm_multidc/results/pre_fix_solver/
-
 # run_chunks.sh scratch output (only the shared solver cache matters)
 cwm_multidc/results/_chunks/
 
-# report build dependencies
-report/node_modules/
+# LaTeX build output (only report/CSD493_Final_Report.pdf is kept)
+report/main.pdf
+report/*.aux
+report/*.toc
+report/*.lof
+report/*.lot
+report/*.out

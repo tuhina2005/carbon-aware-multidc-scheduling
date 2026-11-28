@@ -1,7 +1,0 @@
-{
-  "name": "csd493-final-report",
-  "private": true,
-  "description": "Builds CSD493_Final_Report.docx from content_*.js (run: npm install && npm run build)",
-  "scripts": { "build": "python3 make_schematics.py 2>/dev/null || ../.venv/bin/python make_schematics.py; node build_report.js" },
-  "dependencies": { "docx": "^9.0.0" }
-}

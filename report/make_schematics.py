@@ -74,46 +74,90 @@ def architecture():
     plt.close(fig)
 
 
-def cwm_pipeline():
-    """How CWM (Schweisgut et al.) builds one schedule: inputs, its two phases, output."""
-    fig, ax = plt.subplots(figsize=(9, 3.9))
-    w, h = 2.25, 1.4
-    boxes = {
-        "in": (0.1, 1.95, "#ffffff", "Inputs\nworkflow + deadline D\nprocessors: speed,\nidle & working power\ngreen budget\nper interval"),
-        "pick": (2.75, 1.95, "#ffffff", "① Pick processors\nper interval: the\nfastest set that fits\nthe green budget\n(knapsack DP)"),
-        "place": (5.4, 1.95, "#ffffff", "② Place tasks\nin HEFT priority\norder, each on the\nprocessor that\nfinishes it earliest"),
-        "ls": (8.05, 1.95, COMP, "③ Local search\nshift tasks out of\nintervals over the\ngreen budget,\nkeeping the deadline"),
-        "rep": (5.4, 0.15, QUEUE, "④ Deadline repair\nreschedule late\ntasks on all\nprocessors (HEFT-SL),\nthen local search"),
-        "out": (8.05, 0.15, NET, "Output\nschedule + its\nbrown energy\n(energy used above\nthe green budget)"),
-    }
-    for key, (x, y, face, label) in boxes.items():
-        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.02,rounding_size=0.08",
-                                    facecolor=face, edgecolor=INK2, linewidth=1))
-        title, *rest = label.split("\n")
-        light = face in (COMP, NET)
-        ax.text(x + w / 2, y + h - 0.22, title, ha="center", va="center", fontsize=10.5, weight="bold",
-                color="#ffffff" if light else INK)
-        ax.text(x + w / 2, y + (h - 0.35) / 2, "\n".join(rest), ha="center", va="center", fontsize=8.6,
-                color="#ffffff" if light else INK2)
-
-    def arrow(p, q, label=None):
-        ax.add_patch(FancyArrowPatch(p, q, arrowstyle="-|>", mutation_scale=11, color=INK2, lw=1.1))
-        if label:
-            ax.text((p[0] + q[0]) / 2 + 0.08, (p[1] + q[1]) / 2, label, fontsize=8.6, color=INK2, va="center")
-    arrow((2.35, 2.65), (2.75, 2.65))
-    arrow((5.0, 2.65), (5.4, 2.65))
-    arrow((7.65, 2.65), (8.05, 2.65))
-    arrow((9.17, 1.95), (9.17, 1.55), "deadline met")
-    arrow((8.6, 1.95), (6.9, 1.55))
-    ax.text(7.45, 1.85, "deadline missed", fontsize=8.6, color=INK2, ha="right", va="center")
-    arrow((7.65, 0.85), (8.05, 0.85))
-    ax.text(5.05, 3.55, "Phase 1: carbon first", fontsize=9.5, color=INK2, ha="center")
-    ax.text(5.2, 0.85, "Phase 2 (only if needed):\nmeet the deadline", fontsize=9.5, color=INK2, ha="right", va="center")
-    ax.set_xlim(0, 10.4)
-    ax.set_ylim(0, 3.75)
+def architecture_big():
+    """Full-page, self-explanatory architecture: inputs, five stages, which file does what."""
+    TEAL, AMBER, SOFT = "#1F6F66", "#C8652A", "#F1F0EB"
+    fig, ax = plt.subplots(figsize=(8.5, 12.3))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(-0.15, 14.5)
     ax.axis("off")
-    fig.tight_layout()
-    fig.savefig(OUT / "fig_cwm.png", dpi=200)
+
+    def box(x, y, w, h, title, body, face="#ffffff", edge=INK2, tcol=INK, bcol=INK2, tag=None, lw=1.2,
+            tsize=12, bsize=9.4, tag_on_title=True):
+        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.02,rounding_size=0.12",
+                                    facecolor=face, edgecolor=edge, linewidth=lw))
+        ax.text(x + 0.2, y + h - 0.22, title, ha="left", va="top", fontsize=tsize, weight="bold", color=tcol)
+        ax.text(x + 0.2, y + h - 0.68, body, ha="left", va="top", fontsize=bsize, color=bcol, linespacing=1.4)
+        if tag and tag_on_title:
+            ax.text(x + w - 0.2, y + h - 0.26, tag, ha="right", va="top", fontsize=8.6, color=bcol, style="italic")
+        elif tag:
+            ax.text(x + 0.2, y + 0.14, tag, ha="left", va="bottom", fontsize=8.2, color=bcol, style="italic")
+
+    def down(x, y0, y1, label=None):
+        ax.add_patch(FancyArrowPatch((x, y0), (x, y1), arrowstyle="-|>", mutation_scale=18, color=INK2, lw=1.6))
+        if label:
+            ax.text(x + 0.18, (y0 + y1) / 2, label, fontsize=9.2, color=INK2, va="center", style="italic")
+
+    ax.text(5, 14.35, "How the system works, end to end", ha="center", va="top", fontsize=17, weight="bold",
+            color=INK)
+    ax.text(5, 13.85, "Read from top to bottom.  Teal border = this project's code;  green = the CWM solver "
+            "(reused);  orange = results.", ha="center", va="top", fontsize=8.8, color=INK2)
+
+    ax.text(0.2, 13.4, "INPUTS", fontsize=10, weight="bold", color=TEAL, va="top")
+    ins = [("Grid carbon", "Hourly CI for 2024\nGermany, Norway,\nFrance, Poland,\nCalifornia"),
+           ("Workflow", "Task graph, e.g.\neager1000\n0.1–10 TB of input\nin Frankfurt"),
+           ("Settings", "Deadline D =\nα × makespan\n1 Gbit/s link\nε kWh per GB"),
+           ("Optional studies", "Hardware + PUE\nper data centre\nOffice-hour queues\nOther data origins")]
+    for k, (t, b) in enumerate(ins):
+        box(0.2 + k * 2.45, 10.95, 2.3, 2.05, t, b, tsize=10.5, bsize=8.6)
+    ax.plot([1.35, 8.7], [10.7, 10.7], color=INK2, lw=1.4)
+    for k in range(4):
+        ax.plot([1.35 + k * 2.45] * 2, [10.95, 10.7], color=INK2, lw=1.4)
+    down(5, 10.7, 10.35)
+
+    box(0.2, 8.65, 9.6, 1.7, "1   Build the world",
+        "Put the five data centres on one shared clock. For each one, record its hourly\n"
+        "carbon intensity and a green-power budget derived from it (a cleaner hour gives a\n"
+        "bigger budget); in some studies also its hardware and its queue.",
+        edge=TEAL, lw=2, tag="data_loader.py")
+    down(5, 8.65, 8.3)
+    box(0.2, 6.6, 9.6, 1.7, "2   List the candidates",
+        "Every data centre × every transfer start time. Only starts on hour boundaries\n"
+        "can be best (Property 2), so the list stays small. Drop any candidate that leaves\n"
+        "less time than the workflow needs even at full speed.",
+        edge=TEAL, lw=2, tag="optimizer.py")
+    down(5, 6.6, 6.25, "for each candidate")
+
+    ax.add_patch(FancyBboxPatch((0.2, 2.05), 9.6, 4.2, boxstyle="round,pad=0.02,rounding_size=0.12",
+                                facecolor=SOFT, edgecolor=TEAL, linewidth=2))
+    ax.text(0.4, 6.03, "3   Score the candidate exactly", fontsize=12, weight="bold", color=INK, va="top")
+    ax.text(9.6, 6.03, "Total carbon = ② + ④", fontsize=11, weight="bold", color=TEAL, ha="right", va="top")
+    w, h = 4.45, 1.6
+    subs = [(0.42, 4.1, "① When does the data arrive?", "start + size ÷ bandwidth\n(+ queue wait, if any)",
+             "#ffffff", INK, INK2, "wan_model.py"),
+            (5.13, 4.1, "② Network carbon", "ε × size × average carbon\nintensity of both ends", "#ffffff",
+             INK, INK2, "wan_model.py"),
+            (0.42, 2.42, "③ Cut the green budget", "keep only the hours from\narrival to the deadline (D′)",
+             "#ffffff", INK, INK2, "profile_shifting.py"),
+            (5.13, 2.42, "④ Run CWM inside that DC", "schedule + energy per hour\n→ compute carbon (× PUE)",
+             COMP, "#ffffff", "#ffffff", "solve_cwm (C++) via cwm_runner.py")]
+    for x, y, t, b, face, tc, bc, tag in subs:
+        box(x, y, w, h, t, b, face=face, tcol=tc, bcol=bc, tag=tag, tsize=10.5, bsize=9, tag_on_title=False)
+    ax.add_patch(FancyArrowPatch((4.87, 4.95), (5.13, 4.95), arrowstyle="-|>", mutation_scale=12, color=INK2))
+    ax.add_patch(FancyArrowPatch((2.65, 4.1), (2.65, 4.02), arrowstyle="-|>", mutation_scale=14, color=INK2))
+    ax.add_patch(FancyArrowPatch((4.87, 3.22), (5.13, 3.22), arrowstyle="-|>", mutation_scale=12, color=INK2))
+    ax.text(5, 2.1, "Every CWM run is cached (inputs + solver fingerprint), so long runs can stop and resume.",
+            fontsize=8.4, color=INK2, ha="center", va="bottom", style="italic")
+    down(5, 2.05, 1.75, "all candidates scored")
+
+    box(0.2, 0.0, 4.6, 1.75, "4   Choose",
+        "Ours = the lowest total.\nEvery baseline (Stay-local,\nGreenest-DC, No-wait …) is another\n"
+        "rule applied to the same scores.", edge=NET, lw=2, tsize=11.5, bsize=9, tag="optimizer.py")
+    box(5.2, 0.0, 4.6, 1.75, "5   Results",
+        "Tables and figures for the report.\n129 tests, e.g. Ours is never\nworse than any rule it could pick.",
+        face=AMBER, edge=AMBER, tcol="#ffffff", bcol="#ffffff", tsize=11.5, bsize=9, tag="plots.py")
+    ax.add_patch(FancyArrowPatch((4.8, 0.88), (5.2, 0.88), arrowstyle="-|>", mutation_scale=16, color=INK2, lw=1.4))
+    fig.savefig(OUT / "fig_architecture_big.png", dpi=220, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -121,4 +165,4 @@ if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
     timeline()
     architecture()
-    cwm_pipeline()
+    architecture_big()

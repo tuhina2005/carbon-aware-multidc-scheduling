@@ -171,8 +171,6 @@ submission/
 ├── PROJECT_GUIDE.md          ← this file
 ├── README.md                 short entry point and licences (run instructions: cwm_multidc/README.md §6, §6a)
 ├── finalized_extension.md    full technical design, theory, threats to validity, final results (§14)
-├── FINAL_PLAN.md             decision log: what we planned, decided and why
-├── writeup_notes.md          notes for the paper-style write-up
 │
 ├── code_cwm/                 ORIGINAL CWM (C++) — the single-data-centre solver
 │   ├── code/
@@ -204,11 +202,12 @@ submission/
 │   ├── data/                 see Section 5
 │   └── results/              see Section 7
 │
-├── report/                   final report (CSD493 format)
-│   ├── CSD493_Final_Report.docx / .pdf
-│   ├── build_report.js, content_a.js, content_b.js, lib.js, refs.js, labels.js  — report source
-│   ├── make_schematics.py    draws the architecture and timeline figures
-│   └── figures/
+├── report/                   final report (B.Tech format)
+│   ├── CSD493_Final_Report.pdf   the compiled report
+│   ├── main.tex              LaTeX source (compile with XeLaTeX, or: tectonic main.tex)
+│   ├── media/media/          figures used by main.tex
+│   ├── make_schematics.py    draws the schematic diagrams (timeline, architecture)
+│   └── figures/              output of make_schematics.py
 │
 ├── setup.sh                  builds CWM + CaWoSched and creates the Python venv
 ├── check.sh                  checks the setup without running anything

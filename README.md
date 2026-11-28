@@ -6,7 +6,8 @@ multi-data-centre extension (`cwm_multidc/`).
 - `PROJECT_GUIDE.md`: plain-language overview of the extension, results and repository layout.
 - `cwm_multidc/README.md`: how to run the extension (model decisions in §5, experiments in §6, studies in §6a).
 - `finalized_extension.md`: full technical design, theory and threats to validity.
-- `report/CSD493_Final_Report.pdf`: the final report.
+- `report/CSD493_Final_Report.pdf`: the final report; its LaTeX source is `report/main.tex`
+  (compile with XeLaTeX, e.g. `cd report && tectonic main.tex`).
 - `setup.sh`, `check.sh`, `reproduce.sh`: build and reproduce the original CWM paper's experiments;
   `reproduce_multidc.sh` and `run_chunks.sh` reproduce the extension's results.
 

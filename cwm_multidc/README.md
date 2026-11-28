@@ -237,7 +237,7 @@ Forecast experiments decide on CI × exp(AR(1) noise) and score the chosen point
 Each study is a subcommand of `cwm_multidc.experiments` (add `--ci-dir cwm_multidc/data/public_ci`),
 writes `<study>_summary.csv` / `<study>_evals.csv` and a Markdown report into its own folder under
 `results/`, and was specified (hypothesis included) before it was run. Summary in
-`finalized_extension.md` §14; decision log in `FINAL_PLAN.md`.
+`finalized_extension.md` §14.
 
 | Subcommand | Folder | Question | Key setting |
 |---|---|---|---|
